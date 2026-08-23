@@ -1124,11 +1124,9 @@ const VisitList = () => {
                 value={treatmentForm.service_id}
                 onChange={(e) => {
                   const val = e.target.value;
-                  const srv = services.find(s => s._id === val);
                   setTreatmentForm({
                     ...treatmentForm,
-                    service_id: val,
-                    price: srv?.price !== undefined ? srv.price : treatmentForm.price
+                    service_id: val
                   });
                 }}
                 className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition cursor-pointer"
@@ -1136,7 +1134,7 @@ const VisitList = () => {
                 <option value="">-- Select Dental Procedure --</option>
                 {services.map((s) => (
                   <option key={s._id} value={s._id}>
-                    {s.service_name} — ${Number(s.price).toFixed(2)} ({s.category})
+                    {s.service_name}
                   </option>
                 ))}
               </select>
@@ -1148,6 +1146,8 @@ const VisitList = () => {
                 type="number"
                 required
                 min="0"
+                step="0.01"
+                placeholder="Enter procedure price ($)"
                 value={treatmentForm.price}
                 onChange={(e) => setTreatmentForm({ ...treatmentForm, price: e.target.value })}
                 className="w-full p-2.5 bg-slate-50 border rounded-xl font-mono font-bold text-slate-900"
