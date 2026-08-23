@@ -1,6 +1,7 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { useNavigate } from 'react-router-dom';
+import { updateProfileApi } from '../../api/endpoints.js';
 import {
   User,
   Upload,
@@ -12,6 +13,7 @@ import {
   LogOut,
   Save,
   CheckCircle,
+  AlertCircle,
   X
 } from 'lucide-react';
 
@@ -25,15 +27,56 @@ const ProfileModal = ({ isOpen, onClose }) => {
   const [password, setPassword] = useState('');
   const [profileImage, setProfileImage] = useState(user?.profile_image || '');
   const [isDragging, setIsDragging] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [errorMsg, setErrorMsg] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
+
+  useEffect(() => {
+    if (user) {
+      setFullName(user.full_name || '');
+      setEmail(user.email || '');
+      setProfileImage(user.profile_image || '');
+      setPassword('');
+      setErrorMsg('');
+      setSuccessMsg('');
+    }
+  }, [user, isOpen]);
 
   if (!isOpen) return null;
 
   const handleImageFile = (file) => {
     if (file && file.type.startsWith('image/')) {
       const reader = new FileReader();
-      reader.onload = (e) => {
-        setProfileImage(e.target.result);
+      reader.onload = (event) => {
+        const img = new Image();
+        img.onload = () => {
+          // Scale down image to optimal avatar size (max 400x400)
+          const canvas = document.createElement('canvas');
+          const MAX_SIZE = 400;
+          let width = img.width;
+          let height = img.height;
+
+          if (width > height) {
+            if (width > MAX_SIZE) {
+              height = Math.round((height * MAX_SIZE) / width);
+              width = MAX_SIZE;
+            }
+          } else {
+            if (height > MAX_SIZE) {
+              width = Math.round((width * MAX_SIZE) / height);
+              height = MAX_SIZE;
+            }
+          }
+
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, width, height);
+
+          const compressedBase64 = canvas.toDataURL('image/jpeg', 0.85);
+          setProfileImage(compressedBase64);
+        };
+        img.src = event.target.result;
       };
       reader.readAsDataURL(file);
     }
@@ -57,25 +100,43 @@ const ProfileModal = ({ isOpen, onClose }) => {
     setIsDragging(false);
   };
 
-  const handleSave = (e) => {
+  const handleSave = async (e) => {
     e.preventDefault();
-    const updated = {
-      ...user,
-      full_name: fullName,
-      email: email,
-      profile_image: profileImage
-    };
-    if (updateUser) {
-      updateUser(updated);
-    } else if (setUser) {
-      setUser(updated);
-      localStorage.setItem('snab_dental_user', JSON.stringify(updated));
+    setSaving(true);
+    setErrorMsg('');
+    setSuccessMsg('');
+
+    try {
+      const payload = {
+        full_name: fullName.trim(),
+        email: email.trim(),
+        profile_image: profileImage,
+        password: password.trim() ? password.trim() : undefined
+      };
+
+      const res = await updateProfileApi(payload);
+      if (res.data.success) {
+        const updatedUser = res.data.user;
+        if (updateUser) {
+          updateUser(updatedUser);
+        } else if (setUser) {
+          setUser(updatedUser);
+          localStorage.setItem('snab_dental_user', JSON.stringify(updatedUser));
+        }
+        setSuccessMsg('Profile updated and saved to database successfully!');
+        setTimeout(() => {
+          setSuccessMsg('');
+          onClose();
+        }, 1200);
+      } else {
+        setErrorMsg(res.data.message || 'Failed to update profile');
+      }
+    } catch (err) {
+      console.error('Error updating profile:', err);
+      setErrorMsg(err.response?.data?.message || 'Failed to save profile. Please try again.');
+    } finally {
+      setSaving(false);
     }
-    setSuccessMsg('Profile updated successfully!');
-    setTimeout(() => {
-      setSuccessMsg('');
-      onClose();
-    }, 1200);
   };
 
   const handleLogout = () => {
@@ -113,6 +174,13 @@ const ProfileModal = ({ isOpen, onClose }) => {
             <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-xl flex items-center gap-2 font-bold">
               <CheckCircle className="w-4 h-4 shrink-0" />
               <span>{successMsg}</span>
+            </div>
+          )}
+
+          {errorMsg && (
+            <div className="p-3 bg-rose-50 border border-rose-200 text-rose-700 rounded-xl flex items-center gap-2 font-bold">
+              <AlertCircle className="w-4 h-4 shrink-0" />
+              <span>{errorMsg}</span>
             </div>
           )}
 
@@ -252,10 +320,20 @@ const ProfileModal = ({ isOpen, onClose }) => {
               </button>
               <button
                 type="submit"
-                className="flex items-center gap-1.5 px-5 py-2 bg-blue-600 hover:bg-blue-700 active:scale-95 text-white font-bold rounded-xl shadow-md transition cursor-pointer"
+                disabled={saving}
+                className="flex items-center gap-1.5 px-5 py-2 bg-blue-600 hover:bg-blue-700 active:scale-95 disabled:opacity-50 text-white font-bold rounded-xl shadow-md transition cursor-pointer"
               >
-                <Save className="w-4 h-4" />
-                <span>Save Changes</span>
+                {saving ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    <span>Saving...</span>
+                  </>
+                ) : (
+                  <>
+                    <Save className="w-4 h-4" />
+                    <span>Save Changes</span>
+                  </>
+                )}
               </button>
             </div>
           </div>

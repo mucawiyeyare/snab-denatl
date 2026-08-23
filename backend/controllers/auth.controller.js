@@ -108,6 +108,7 @@ export const login = async (req, res, next) => {
         full_name: user.full_name,
         role: user.role,
         email: user.email,
+        profile_image: user.profile_image,
         employee: user.employee_id
       }
     });
@@ -120,6 +121,47 @@ export const getMe = async (req, res, next) => {
   try {
     const user = await User.findById(req.user._id).select('-password_hash').populate('employee_id');
     res.json({ success: true, user });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const updateProfile = async (req, res, next) => {
+  try {
+    const { full_name, email, profile_image, password } = req.body;
+    const user = await User.findById(req.user._id);
+
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+
+    if (full_name !== undefined) user.full_name = full_name.trim();
+    if (email !== undefined) user.email = email.toLowerCase().trim();
+    if (profile_image !== undefined) user.profile_image = profile_image;
+
+    if (password && password.trim().length >= 6) {
+      const salt = await bcrypt.genSalt(10);
+      user.password_hash = await bcrypt.hash(password.trim(), salt);
+    }
+
+    await user.save();
+
+    const updatedUser = await User.findById(user._id).select('-password_hash').populate('employee_id');
+
+    await logAudit({
+      user: req.user,
+      action: 'UPDATE_PROFILE',
+      entity: 'User',
+      entity_id: user._id,
+      details: { username: user.username, hasProfileImage: !!user.profile_image },
+      ip_address: req.ip
+    });
+
+    res.json({
+      success: true,
+      message: 'Profile updated successfully',
+      user: updatedUser
+    });
   } catch (error) {
     next(error);
   }

@@ -4,6 +4,7 @@ import api from './axios.js';
 export const loginApi = (credentials) => api.post('/auth/login', credentials);
 export const registerApi = (data) => api.post('/auth/register', data);
 export const getMeApi = () => api.get('/auth/me');
+export const updateProfileApi = (data) => api.put('/auth/update-profile', data);
 export const updatePasswordApi = (data) => api.put('/auth/update-password', data);
 
 
