@@ -17,9 +17,15 @@ export const getVisits = async (req, res, next) => {
     const { status, doctor_id, patient_id, today, search } = req.query;
     let filter = {};
 
-    if (status) filter.status = status;
-    if (doctor_id) filter.doctor_id = doctor_id;
+    // Strict Doctor Scoping: Doctors ONLY see their assigned visits
+    if (req.user?.role === 'Doctor') {
+      filter.doctor_id = req.user._id;
+    } else if (doctor_id) {
+      filter.doctor_id = doctor_id;
+    }
+
     if (patient_id) filter.patient_id = patient_id;
+    if (status) filter.status = status;
 
     if (today === 'true') {
       const startOfDay = new Date();
@@ -58,6 +64,14 @@ export const getVisitById = async (req, res, next) => {
 
     if (!visit) {
       return res.status(404).json({ success: false, message: 'Visit not found' });
+    }
+
+    // Strict Doctor Scoping: verify visit belongs to this doctor
+    if (req.user?.role === 'Doctor' && visit.doctor_id?._id?.toString() !== req.user._id.toString()) {
+      return res.status(403).json({
+        success: false,
+        message: 'Access denied. You can only view visits assigned to you.'
+      });
     }
 
     const [consultations, labRequests, labResults, treatments, invoices, payments, followups] = await Promise.all([
@@ -112,6 +126,15 @@ export const createVisit = async (req, res, next) => {
     }
 
     const isFeeRequired = isFirstVisit && consultationFee > 0;
+
+    // Update patient assigned doctor if not set or provided
+    if (doctor_id) {
+      const doc = await User.findById(doctor_id);
+      patient.assigned_doctor_id = doctor_id;
+      patient.assigned_doctor_name = doc?.full_name || doc?.username || '';
+      if (!patient.primary_doctor_id) patient.primary_doctor_id = doctor_id;
+      await patient.save();
+    }
 
     const visit = await Visit.create({
       visit_number,

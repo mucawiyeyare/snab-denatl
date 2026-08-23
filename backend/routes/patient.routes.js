@@ -4,10 +4,11 @@ import {
   getPatientById,
   createPatient,
   updatePatient,
+  deletePatient,
   getPatientHistory,
   checkTelephoneAvailability
 } from '../controllers/patient.controller.js';
-import { protect } from '../middleware/auth.js';
+import { protect, authorize } from '../middleware/auth.js';
 
 const router = express.Router();
 
@@ -23,6 +24,7 @@ router.get('/:id/history', getPatientHistory);
 
 router.route('/:id')
   .get(getPatientById)
-  .put(updatePatient);
+  .put(updatePatient)
+  .delete(authorize('Admin'), deletePatient);
 
 export default router;

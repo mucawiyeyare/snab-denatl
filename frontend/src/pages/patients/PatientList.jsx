@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../../context/AuthContext.jsx';
 import {
   getPatientsApi,
   createPatientApi,
@@ -19,8 +20,22 @@ import {
   UserCheck,
   Edit2,
   Trash2,
-  XCircle
+  XCircle,
+  Stethoscope
 } from 'lucide-react';
+
+const BLOOD_GROUPS = [
+  { value: '', label: 'Select Blood Group (Optional)' },
+  { value: 'A+', label: 'A+ (A Positive)' },
+  { value: 'A-', label: 'A- (A Negative)' },
+  { value: 'B+', label: 'B+ (B Positive)' },
+  { value: 'B-', label: 'B- (B Negative)' },
+  { value: 'AB+', label: 'AB+ (AB Positive)' },
+  { value: 'AB-', label: 'AB- (AB Negative)' },
+  { value: 'O+', label: 'O+ (O Positive)' },
+  { value: 'O-', label: 'O- (O Negative)' },
+  { value: 'Unknown', label: 'Unknown / Not Tested' }
+];
 
 const VISIT_TYPES = [
   { value: 'first', label: 'First Visit', desc: 'Consultation fee applied' },
@@ -56,6 +71,7 @@ const EMPTY_VISIT = {
 };
 
 const PatientList = () => {
+  const { user } = useAuth();
   const navigate = useNavigate();
   const [patients, setPatients] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -480,13 +496,15 @@ const PatientList = () => {
                                 >
                                   <Edit2 className="w-3.5 h-3.5" />
                                 </button>
-                                <button
-                                  onClick={() => setDeleteConfirmId(p._id)}
-                                  title="Delete Patient"
-                                  className="p-1.5 bg-rose-50 hover:bg-rose-500 hover:text-white text-rose-500 rounded-lg transition cursor-pointer"
-                                >
-                                  <Trash2 className="w-3.5 h-3.5" />
-                                </button>
+                                {user?.role === 'Admin' && (
+                                  <button
+                                    onClick={() => setDeleteConfirmId(p._id)}
+                                    title="Delete Patient (Admin Only)"
+                                    className="p-1.5 bg-rose-50 hover:bg-rose-500 hover:text-white text-rose-500 rounded-lg transition cursor-pointer"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                )}
                               </div>
                             )}
                           </td>
@@ -788,13 +806,17 @@ const PatientList = () => {
                           <label className="block text-[11px] font-bold text-slate-700 mb-1">
                             Blood Group
                           </label>
-                          <input
-                            type="text"
-                            value={formData.medical_info.blood_group}
+                          <select
+                            value={formData.medical_info.blood_group || ''}
                             onChange={(e) => pf('medical_info.blood_group', e.target.value)}
-                            placeholder="e.g. O+, A+, B-"
-                            className="w-full px-3.5 py-2 rounded-xl border border-slate-200 text-xs text-slate-800 placeholder:text-slate-400 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white transition"
-                          />
+                            className="w-full px-3.5 py-2 rounded-xl border border-slate-200 text-xs font-semibold text-slate-800 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white transition cursor-pointer"
+                          >
+                            {BLOOD_GROUPS.map((bg) => (
+                              <option key={bg.value} value={bg.value}>
+                                {bg.label}
+                              </option>
+                            ))}
+                          </select>
                         </div>
                         <div>
                           <label className="block text-[11px] font-bold text-slate-700 mb-1">
@@ -826,7 +848,7 @@ const PatientList = () => {
                               required
                               value={formData.doctor_id}
                               onChange={(e) => pf('doctor_id', e.target.value)}
-                              className="w-full px-3.5 py-2 rounded-xl border border-slate-200 text-xs text-slate-900 font-bold focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white transition cursor-pointer"
+                              className="w-full px-3.5 py-2 rounded-xl border border-slate-200 text-xs font-semibold text-slate-800 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white transition cursor-pointer"
                             >
                               <option value="">-- Select Attending Doctor --</option>
                               {doctors.map((d) => (

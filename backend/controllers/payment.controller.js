@@ -69,24 +69,69 @@ export const recordPayment = async (req, res, next) => {
   try {
     const { invoice_id, visit_id, patient_id, amount, discount, payment_method, payment_category, transaction_reference, notes } = req.body;
 
-    const invoice = await Invoice.findById(invoice_id);
+    const invoice = invoice_id 
+      ? await Invoice.findById(invoice_id)
+      : (visit_id ? await Invoice.findOne({ visit_id }) : null);
+
     if (!invoice) {
-      return res.status(404).json({ success: false, message: 'Invoice not found' });
+      return res.status(404).json({ success: false, message: 'Invoice not found for this transaction.' });
     }
 
     const visit = await Visit.findById(visit_id || invoice.visit_id);
+
+    // 1. Current outstanding balance before this payment
+    const currentInvoiceBalance = invoice.balance !== undefined
+      ? invoice.balance
+      : Math.max(0, (invoice.total_amount || 0) - (invoice.paid_amount || 0));
+
+    // 2. Validate Cashier Discount
+    const cashierDiscount = Number(discount) || 0;
+    if (cashierDiscount < 0) {
+      return res.status(400).json({ success: false, message: 'Discount cannot be negative.' });
+    }
+    if (cashierDiscount > currentInvoiceBalance + 0.001) {
+      return res.status(400).json({
+        success: false,
+        message: `Cashier discount ($${cashierDiscount.toFixed(2)}) cannot exceed the patient's outstanding balance of $${currentInvoiceBalance.toFixed(2)}.`
+      });
+    }
+
+    // 3. Validate Payment Amount
+    const maxPayable = Math.max(0, currentInvoiceBalance - cashierDiscount);
     const payAmount = Number(amount);
 
-    if (payAmount <= 0) {
-      return res.status(400).json({ success: false, message: 'Payment amount must be greater than 0' });
+    if (payAmount < 0) {
+      return res.status(400).json({ success: false, message: 'Payment amount cannot be negative.' });
+    }
+    if (payAmount <= 0 && maxPayable > 0) {
+      return res.status(400).json({ success: false, message: 'Payment amount must be greater than 0.' });
+    }
+    if (payAmount > maxPayable + 0.001) {
+      return res.status(400).json({
+        success: false,
+        message: `Payment amount ($${payAmount.toFixed(2)}) cannot exceed the patient's outstanding balance of $${maxPayable.toFixed(2)}.`
+      });
     }
 
-    // Apply Cashier discount if provided
-    const cashierDiscount = Number(discount) || 0;
+    // 4. Apply Cashier discount to invoice
     if (cashierDiscount > 0) {
       invoice.discount = (invoice.discount || 0) + cashierDiscount;
-      invoice.total_amount = Math.max(0, invoice.subtotal - invoice.discount);
+      invoice.total_amount = Math.max(0, (invoice.subtotal || invoice.total_amount) - invoice.discount);
     }
+
+    // 5. Update Invoice balances
+    invoice.paid_amount = (invoice.paid_amount || 0) + payAmount;
+    invoice.balance = Math.max(0, invoice.total_amount - invoice.paid_amount);
+
+    if (invoice.balance <= 0) {
+      invoice.status = 'Paid';
+      if (invoice.items && invoice.items.length > 0) {
+        invoice.items.forEach(item => { item.paid_status = 'Paid'; });
+      }
+    } else {
+      invoice.status = 'Partially Paid';
+    }
+    await invoice.save();
 
     const receipt_number = await generateReceiptNumber();
 
@@ -98,24 +143,14 @@ export const recordPayment = async (req, res, next) => {
       visit_id: visit?._id || invoice.visit_id,
       payment_category: payment_category || 'Final Bill / Consolidated',
       amount: payAmount,
+      discount: cashierDiscount,
+      remaining_balance: invoice.balance,
       payment_method: payment_method || 'Cash',
       transaction_reference: transaction_reference || '',
       received_by: req.user._id,
       received_by_name: req.user.full_name || req.user.username,
-      notes: notes || (cashierDiscount > 0 ? `Cashier discount applied: $${cashierDiscount}` : '')
+      notes: notes || (cashierDiscount > 0 ? `Cashier discount applied: $${cashierDiscount.toFixed(2)}` : '')
     });
-
-    // Update Invoice balances
-    invoice.paid_amount = (invoice.paid_amount || 0) + payAmount;
-    invoice.balance = Math.max(0, invoice.total_amount - invoice.paid_amount);
-
-    if (invoice.balance <= 0) {
-      invoice.status = 'Paid';
-      invoice.items.forEach(item => { item.paid_status = 'Paid'; });
-    } else {
-      invoice.status = 'Partially Paid';
-    }
-    await invoice.save();
 
     // Update Visit & related items status based on workflow
     if (visit) {
@@ -175,7 +210,21 @@ export const recordPayment = async (req, res, next) => {
       action: 'RECORD_PAYMENT',
       entity: 'Payment',
       entity_id: payment._id,
-      details: { receipt_number, amount: payAmount, method: payment_method, category: payment_category }
+      details: {
+        receipt_number,
+        invoice_id: invoice._id,
+        invoice_number: invoice.invoice_number,
+        patient_id: payment.patient_id,
+        cashier_id: req.user._id,
+        cashier_name: req.user.full_name || req.user.username,
+        date_time: new Date(),
+        payment_method,
+        payment_category,
+        amount_paid: payAmount,
+        discount_applied: cashierDiscount,
+        total_patient_cost: invoice.subtotal || invoice.total_amount,
+        remaining_balance: invoice.balance
+      }
     });
 
     const populatedPayment = await Payment.findById(payment._id)

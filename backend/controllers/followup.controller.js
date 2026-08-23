@@ -6,7 +6,13 @@ export const getFollowups = async (req, res, next) => {
     const { doctor_id, patient_id, status, upcoming } = req.query;
     let filter = {};
 
-    if (doctor_id) filter.doctor_id = doctor_id;
+    // Strict Doctor Scoping: Doctors ONLY see their assigned follow-ups
+    if (req.user?.role === 'Doctor') {
+      filter.doctor_id = req.user._id;
+    } else if (doctor_id) {
+      filter.doctor_id = doctor_id;
+    }
+
     if (patient_id) filter.patient_id = patient_id;
     if (status) filter.status = status;
 

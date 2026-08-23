@@ -11,7 +11,8 @@ import {
 } from '../../api/endpoints.js';
 import StatusBadge from '../../components/ui/StatusBadge.jsx';
 import Modal from '../../components/ui/Modal.jsx';
-import { Calendar, Plus, Search, Clock, RefreshCw, UserCheck, AlertTriangle, CheckCircle2 } from 'lucide-react';
+import SearchableSelect from '../../components/ui/SearchableSelect.jsx';
+import { Calendar, Plus, Search, Clock, RefreshCw, UserCheck, AlertTriangle, CheckCircle2, Users, Stethoscope } from 'lucide-react';
 
 const AppointmentList = () => {
   // Tab: 'appointments' | 'followups'
@@ -519,25 +520,45 @@ const AppointmentList = () => {
       >
         <form onSubmit={handleAptSubmit} className="space-y-3.5 text-xs">
           <div>
-            <label className="block text-[11px] font-bold text-slate-700 mb-1">Select Patient *</label>
-            <select required value={aptForm.patient_id}
-              onChange={e => setAptForm({ ...aptForm, patient_id: e.target.value })}
-              className="w-full px-3.5 py-2 rounded-xl border border-slate-200 text-xs text-slate-800 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white transition cursor-pointer font-bold">
-              <option value="">-- Choose Patient --</option>
-              {patients.map(p => (
-                <option key={p._id} value={p._id}>{p.name} ({p.patient_number}) - {p.telephone}</option>
-              ))}
-            </select>
+            <SearchableSelect
+              label="Select Patient"
+              required
+              icon={Users}
+              placeholder="-- Search & Select Patient --"
+              searchPlaceholder="Search patient by name, telephone, or ID..."
+              value={aptForm.patient_id}
+              onChange={(val) => setAptForm({ ...aptForm, patient_id: val })}
+              onSearch={async (q) => {
+                const res = await getPatientsApi({ search: q, limit: 30 });
+                return (res.data?.data || []).map(p => ({
+                  value: p._id,
+                  label: p.name,
+                  sublabel: `${p.patient_number} • ${p.telephone}`,
+                  badge: p.gender
+                }));
+              }}
+              options={patients.map(p => ({
+                value: p._id,
+                label: p.name,
+                sublabel: `${p.patient_number} • ${p.telephone}`,
+                badge: p.gender
+              }))}
+            />
           </div>
 
           <div>
             <label className="block text-[11px] font-bold text-slate-700 mb-1">Assign Doctor *</label>
-            <select required value={aptForm.doctor_id}
-              onChange={e => setAptForm({ ...aptForm, doctor_id: e.target.value })}
-              className="w-full px-3.5 py-2 rounded-xl border border-slate-200 text-xs text-slate-800 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white transition cursor-pointer font-bold">
-              <option value="">-- Choose Doctor --</option>
-              {doctors.map(d => (
-                <option key={d._id} value={d._id}>Dr. {d.full_name || d.username}</option>
+            <select
+              required
+              value={aptForm.doctor_id}
+              onChange={(e) => setAptForm({ ...aptForm, doctor_id: e.target.value })}
+              className="w-full px-3.5 py-2 rounded-xl border border-slate-200 text-xs font-semibold text-slate-800 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white transition cursor-pointer"
+            >
+              <option value="">-- Select Attending Doctor --</option>
+              {doctors.map((d) => (
+                <option key={d._id} value={d._id}>
+                  Dr. {d.full_name || d.username} ({d.employee_id?.specialization || 'Dental Surgeon'})
+                </option>
               ))}
             </select>
           </div>
@@ -586,26 +607,46 @@ const AppointmentList = () => {
       >
         <form onSubmit={handleFuSubmit} className="space-y-3.5 text-xs">
           <div>
-            <label className="block text-[11px] font-bold text-slate-700 mb-1">Select Patient *</label>
-            <select required value={fuForm.patient_id}
-              onChange={e => setFuForm({ ...fuForm, patient_id: e.target.value })}
-              className="w-full px-3.5 py-2 rounded-xl border border-slate-200 text-xs text-slate-800 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white transition cursor-pointer font-bold">
-              <option value="">-- Choose Patient --</option>
-              {patients.map(p => (
-                <option key={p._id} value={p._id}>{p.name} ({p.patient_number}) - {p.telephone}</option>
-              ))}
-            </select>
+            <SearchableSelect
+              label="Select Patient"
+              required
+              icon={Users}
+              placeholder="-- Search & Select Patient --"
+              searchPlaceholder="Search patient by name, telephone, or ID..."
+              value={fuForm.patient_id}
+              onChange={(val) => setFuForm({ ...fuForm, patient_id: val })}
+              onSearch={async (q) => {
+                const res = await getPatientsApi({ search: q, limit: 30 });
+                return (res.data?.data || []).map(p => ({
+                  value: p._id,
+                  label: p.name,
+                  sublabel: `${p.patient_number} • ${p.telephone}`,
+                  badge: p.gender
+                }));
+              }}
+              options={patients.map(p => ({
+                value: p._id,
+                label: p.name,
+                sublabel: `${p.patient_number} • ${p.telephone}`,
+                badge: p.gender
+              }))}
+            />
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block text-[11px] font-bold text-slate-700 mb-1">Assign Doctor *</label>
-              <select required value={fuForm.doctor_id}
-                onChange={e => setFuForm({ ...fuForm, doctor_id: e.target.value })}
-                className="w-full px-3.5 py-2 rounded-xl border border-slate-200 text-xs text-slate-800 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white transition cursor-pointer font-bold">
-                <option value="">-- Choose Doctor --</option>
-                {doctors.map(d => (
-                  <option key={d._id} value={d._id}>Dr. {d.full_name || d.username}</option>
+              <select
+                required
+                value={fuForm.doctor_id}
+                onChange={(e) => setFuForm({ ...fuForm, doctor_id: e.target.value })}
+                className="w-full px-3.5 py-2 rounded-xl border border-slate-200 text-xs font-semibold text-slate-800 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white transition cursor-pointer"
+              >
+                <option value="">-- Select Attending Doctor --</option>
+                {doctors.map((d) => (
+                  <option key={d._id} value={d._id}>
+                    Dr. {d.full_name || d.username} ({d.employee_id?.specialization || 'Dental Surgeon'})
+                  </option>
                 ))}
               </select>
             </div>

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext.jsx';
+import DoctorDashboard from './DoctorDashboard.jsx';
 import {
   getDashboardStatsApi,
   getAppointmentsApi,
@@ -14,11 +15,14 @@ import {
   DollarSign,
   CreditCard,
   UserPlus,
+  ChevronLeft,
+  ChevronRight,
   ChevronDown,
   Clock,
   FileText,
   Activity,
-  CheckCircle2
+  CheckCircle2,
+  CalendarDays
 } from 'lucide-react';
 
 /* ==========================================================================
@@ -255,6 +259,26 @@ const Dashboard = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
 
+  // If logged-in user is a Doctor, render dedicated Doctor Dashboard
+  if (user?.role === 'Doctor') {
+    return <DoctorDashboard />;
+  }
+
+  // Generate last 12 months for selector
+  const monthOptions = React.useMemo(() => {
+    const options = [];
+    const now = new Date();
+    for (let i = 0; i < 12; i++) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const val = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      const label = d.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+      options.push({ value: val, label });
+    }
+    return options;
+  }, []);
+
+  const [selectedMonth, setSelectedMonth] = useState(monthOptions[0]?.value || '');
+  const [isHeaderMonthOpen, setIsHeaderMonthOpen] = useState(false);
   const [stats, setStats] = useState(null);
   const [appointments, setAppointments] = useState([]);
   const [invoices, setInvoices] = useState([]);
@@ -264,13 +288,13 @@ const Dashboard = () => {
 
   useEffect(() => {
     fetchDashboardData();
-  }, []);
+  }, [selectedMonth]);
 
   const fetchDashboardData = async () => {
     setLoading(true);
     try {
       const [statsRes, apptsRes, invRes, svcRes, auditRes] = await Promise.all([
-        getDashboardStatsApi().catch(() => ({ data: { data: null } })),
+        getDashboardStatsApi({ month: selectedMonth }).catch(() => ({ data: { data: null } })),
         getAppointmentsApi({ limit: 6 }).catch(() => ({ data: { data: [] } })),
         getInvoicesApi({ status: 'unpaid' }).catch(() => ({ data: { data: [] } })),
         getServiceAnalyticsApi().catch(() => ({ data: { data: { topServices: [] } } })),
@@ -312,6 +336,22 @@ const Dashboard = () => {
     pct: Math.round(((s.count || 0) / maxTreatmentCount) * 100)
   }));
 
+  const handlePrevMonth = (e) => {
+    e?.stopPropagation();
+    const [y, m] = (selectedMonth || `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`).split('-').map(Number);
+    const prevDate = new Date(y, m - 2, 1);
+    const newMonth = `${prevDate.getFullYear()}-${String(prevDate.getMonth() + 1).padStart(2, '0')}`;
+    setSelectedMonth(newMonth);
+  };
+
+  const handleNextMonth = (e) => {
+    e?.stopPropagation();
+    const [y, m] = (selectedMonth || `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`).split('-').map(Number);
+    const nextDate = new Date(y, m, 1);
+    const newMonth = `${nextDate.getFullYear()}-${String(nextDate.getMonth() + 1).padStart(2, '0')}`;
+    setSelectedMonth(newMonth);
+  };
+
   const currentDateFormatted = new Date().toLocaleDateString('en-US', {
     weekday: 'long',
     day: 'numeric',
@@ -319,19 +359,133 @@ const Dashboard = () => {
     year: 'numeric'
   });
 
+  const selectedMonthLabel = monthOptions.find(m => m.value === selectedMonth)?.label || selectedMonth || 'Current Month';
+
   return (
     <div className="space-y-6">
       
-      {/* 1. Header Row (Dashboard Title & Welcome) */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
+      {/* 1. Header Row (Dashboard Title & Welcome + 1-Click Interactive Month Switcher) */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
         <div>
           <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Dashboard</h1>
           <p className="text-xs text-slate-500 font-medium mt-0.5">
             Welcome back, {user?.full_name || user?.username || 'Clinician'}
           </p>
         </div>
-        <div className="text-xs font-semibold text-slate-500 bg-white px-3 py-1.5 rounded-xl border border-slate-100 shadow-2xs">
-          📅 {currentDateFormatted}
+
+        {/* Interactive Month & Date Navigator */}
+        <div className="relative">
+          <div className="bg-white p-1 rounded-2xl border border-slate-200 shadow-2xs flex items-center gap-0.5">
+            {/* Previous Month 1-Click Button */}
+            <button
+              type="button"
+              onClick={handlePrevMonth}
+              className="p-1.5 hover:bg-slate-100 text-slate-600 rounded-xl transition cursor-pointer"
+              title="Previous Month"
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+
+            {/* Center Month / Calendar Button */}
+            <button
+              type="button"
+              onClick={() => setIsHeaderMonthOpen(prev => !prev)}
+              className="px-2.5 py-1 text-xs font-bold text-slate-800 flex items-center gap-1.5 hover:bg-slate-100 rounded-xl transition cursor-pointer"
+              title="Click to choose a month or view calendar"
+            >
+              <CalendarDays className="w-4 h-4 text-blue-600" />
+              <span>{selectedMonthLabel}</span>
+              <ChevronDown className={`w-3.5 h-3.5 text-slate-400 transition-transform ${isHeaderMonthOpen ? 'rotate-180' : ''}`} />
+            </button>
+
+            {/* Next Month 1-Click Button */}
+            <button
+              type="button"
+              onClick={handleNextMonth}
+              className="p-1.5 hover:bg-slate-100 text-slate-600 rounded-xl transition cursor-pointer"
+              title="Next Month"
+            >
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          </div>
+
+          {/* Full Interactive Month Grid & Date Picker Popover */}
+          {isHeaderMonthOpen && (
+            <div className="absolute right-0 top-full mt-2 w-80 bg-white rounded-3xl shadow-2xl border border-slate-100 p-4 z-50 text-slate-800 animate-in fade-in zoom-in-95 duration-150 text-xs">
+              <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+                <div>
+                  <span className="font-black text-slate-900 text-sm block">Select Filter Month</span>
+                  <span className="text-[11px] text-slate-400 font-medium">Filter clinic reports & revenue statistics</span>
+                </div>
+                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-100">
+                  {selectedMonth}
+                </span>
+              </div>
+
+              {/* 12-Month Quick Buttons Grid */}
+              <div className="py-3">
+                <div className="text-[11px] font-bold text-slate-500 mb-2">Available Months:</div>
+                <div className="grid grid-cols-3 gap-1.5 max-h-48 overflow-y-auto pr-1">
+                  {monthOptions.map(opt => {
+                    const isSelected = opt.value === selectedMonth;
+                    return (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        onClick={() => {
+                          setSelectedMonth(opt.value);
+                          setIsHeaderMonthOpen(false);
+                        }}
+                        className={`py-2 px-2 rounded-xl font-bold text-[11px] text-center transition cursor-pointer ${
+                          isSelected
+                            ? 'bg-blue-600 text-white shadow-sm ring-2 ring-blue-200'
+                            : 'bg-slate-50 hover:bg-blue-50 text-slate-700 hover:text-blue-700'
+                        }`}
+                      >
+                        {opt.label.split(' ')[0]} {opt.label.split(' ')[1]}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Direct Native Month Picker */}
+              <div className="py-2 px-3 bg-slate-50 rounded-2xl border border-slate-100 flex items-center justify-between">
+                <span className="text-[11px] font-bold text-slate-500">Pick Any Month:</span>
+                <input
+                  type="month"
+                  value={selectedMonth}
+                  onChange={(e) => {
+                    if (e.target.value) {
+                      setSelectedMonth(e.target.value);
+                      setIsHeaderMonthOpen(false);
+                    }
+                  }}
+                  className="px-2 py-1 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-800 cursor-pointer focus:outline-none focus:border-blue-500"
+                />
+              </div>
+
+              <div className="pt-3 mt-3 border-t border-slate-100 flex justify-between items-center text-[11px]">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedMonth(monthOptions[0]?.value || '');
+                    setIsHeaderMonthOpen(false);
+                  }}
+                  className="font-bold text-blue-600 hover:text-blue-700 cursor-pointer"
+                >
+                  Reset to Current Month
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsHeaderMonthOpen(false)}
+                  className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl cursor-pointer"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 

@@ -34,6 +34,15 @@ const paymentSchema = new mongoose.Schema({
     required: true,
     min: 0.01
   },
+  discount: {
+    type: Number,
+    default: 0,
+    min: 0
+  },
+  remaining_balance: {
+    type: Number,
+    default: 0
+  },
   payment_method: {
     type: String,
     enum: ['Cash', 'Card', 'Mobile Payment', 'Bank Transfer', 'Insurance'],

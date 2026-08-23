@@ -1,6 +1,7 @@
 import Patient from '../models/Patient.js';
 import Visit from '../models/Visit.js';
 import Treatment from '../models/Treatment.js';
+import Consultation from '../models/Consultation.js';
 import LabRequest from '../models/LabRequest.js';
 import Payment from '../models/Payment.js';
 import Invoice from '../models/Invoice.js';
@@ -8,6 +9,8 @@ import Appointment from '../models/Appointment.js';
 import Followup from '../models/Followup.js';
 import Employee from '../models/Employee.js';
 import User from '../models/User.js';
+import DentalService from '../models/DentalService.js';
+import { getDoctorAssignedPatientIds } from '../utils/doctorScope.js';
 
 export const getDashboardStats = async (req, res, next) => {
   try {
@@ -16,7 +19,207 @@ export const getDashboardStats = async (req, res, next) => {
     const endToday = new Date();
     endToday.setHours(23, 59, 59, 999);
 
-    const firstDayOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+    // Target month handling (supports ?month=YYYY-MM)
+    let targetYear = today.getFullYear();
+    let targetMonth = today.getMonth(); // 0-indexed
+    if (req.query.month) {
+      const parts = req.query.month.split('-');
+      if (parts.length === 2) {
+        const y = parseInt(parts[0], 10);
+        const m = parseInt(parts[1], 10);
+        if (!isNaN(y) && !isNaN(m) && m >= 1 && m <= 12) {
+          targetYear = y;
+          targetMonth = m - 1;
+        }
+      }
+    }
+
+    const targetMonthStart = new Date(targetYear, targetMonth, 1);
+    const targetMonthEnd = new Date(targetYear, targetMonth + 1, 0, 23, 59, 59, 999);
+    const selectedMonthStr = `${targetYear}-${String(targetMonth + 1).padStart(2, '0')}`;
+
+    const isDoctor = req.user?.role === 'Doctor';
+
+    // ─────────────────────────────────────────────────────────────
+    // DOCTOR-SPECIFIC DASHBOARD
+    // ─────────────────────────────────────────────────────────────
+    if (isDoctor) {
+      const doctorId = req.user._id;
+      const doctorUser = await User.findById(doctorId).populate('employee_id');
+      const doctorEmployeeId = doctorUser?.employee_id?._id || doctorUser?.employee_id;
+      const doctorIds = [doctorId, doctorEmployeeId].filter(Boolean);
+
+      const assignedPatientIds = await getDoctorAssignedPatientIds(doctorId);
+      const doctorVisitIds = await Visit.find({ doctor_id: { $in: doctorIds } }).distinct('_id');
+      const doctorInvoiceIds = await Invoice.find({
+        $or: [
+          { doctor_id: { $in: doctorIds } },
+          { visit_id: { $in: doctorVisitIds } }
+        ]
+      }).distinct('_id');
+
+      const [
+        totalPatientsServed,
+        todayPatientsCount,
+        pendingAppointmentsCount,
+        todayAppointmentsCount,
+        completedConsultationsCount,
+        doctorMonthPayments,
+        doctorDailyRevenueAgg,
+        recentVisits,
+        upcomingAppointments,
+        recentTreatments,
+        doctorTopServices,
+        doctorPendingFollowups,
+        doctorPendingFollowupsCount
+      ] = await Promise.all([
+        // 1. Patients Served (unique patients who had visits, appointments, treatments or direct assignment)
+        Promise.resolve(assignedPatientIds.length),
+
+        // 2. Today's Patients (visits today)
+        Visit.countDocuments({
+          doctor_id: { $in: doctorIds },
+          visit_date: { $gte: today, $lte: endToday }
+        }),
+
+        // 3. Pending / Upcoming Appointments
+        Appointment.countDocuments({
+          doctor_id: { $in: doctorIds },
+          status: { $in: ['Scheduled', 'Confirmed', 'Pending'] }
+        }),
+
+        // 4. Today Appointments
+        Appointment.countDocuments({
+          doctor_id: { $in: doctorIds },
+          appointment_date: { $gte: today, $lte: endToday }
+        }),
+
+        // 5. Completed Consultations
+        Consultation.countDocuments({ doctor_id: { $in: doctorIds } }),
+
+        // 6. Monthly Payments for Doctor's Services (selected month)
+        Payment.find({
+          $or: [
+            { doctor_id: { $in: doctorIds } },
+            { visit_id: { $in: doctorVisitIds } },
+            { invoice_id: { $in: doctorInvoiceIds } }
+          ],
+          payment_date: { $gte: targetMonthStart, $lte: targetMonthEnd }
+        }),
+
+        // 7. Daily Revenue aggregation for doctor in selected month
+        Payment.aggregate([
+          {
+            $match: {
+              $or: [
+                { doctor_id: { $in: doctorIds } },
+                { visit_id: { $in: doctorVisitIds } },
+                { invoice_id: { $in: doctorInvoiceIds } }
+              ],
+              payment_date: { $gte: targetMonthStart, $lte: targetMonthEnd }
+            }
+          },
+          {
+            $group: {
+              _id: { $dateToString: { format: '%Y-%m-%d', date: '$payment_date' } },
+              total: { $sum: '$amount' }
+            }
+          },
+          { $sort: { _id: 1 } }
+        ]),
+
+        // 8. Recent Served Patients
+        Visit.find({ doctor_id: { $in: doctorIds } })
+          .sort({ visit_date: -1 })
+          .limit(10)
+          .populate('patient_id'),
+
+        // 9. Upcoming Appointments list
+        Appointment.find({
+          doctor_id: { $in: doctorIds },
+          status: { $nin: ['Cancelled'] }
+        })
+          .sort({ appointment_date: -1 })
+          .limit(6)
+          .populate('patient_id'),
+
+        // 10. Recent Activity / Treatments
+        Treatment.find({ doctor_id: { $in: doctorIds } })
+          .sort({ treatment_date: -1 })
+          .limit(8)
+          .populate('patient_id'),
+
+        // 11. Top Services
+        Treatment.aggregate([
+          { $match: { doctor_id: { $in: doctorIds } } },
+          {
+            $group: {
+              _id: '$service_name',
+              count: { $sum: 1 },
+              totalRevenue: { $sum: '$price' }
+            }
+          },
+          { $sort: { count: -1 } },
+          { $limit: 6 }
+        ]),
+
+        // 12. Pending Follow-ups
+        Followup.find({
+          doctor_id: { $in: doctorIds },
+          status: { $in: ['Pending', 'Scheduled', 'Rescheduled'] }
+        })
+          .sort({ followup_date: 1 })
+          .limit(10)
+          .populate('patient_id')
+          .populate('visit_id'),
+
+        // 13. Pending Follow-ups Count
+        Followup.countDocuments({
+          doctor_id: { $in: doctorIds },
+          status: { $in: ['Pending', 'Scheduled', 'Rescheduled'] }
+        })
+      ]);
+
+      const monthlyRevenue = doctorMonthPayments.reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
+
+      // Clean doctor name without duplicate 'Dr.' prefix
+      const rawName = doctorUser?.full_name || doctorUser?.username || 'Doctor';
+      const cleanDoctorName = rawName.startsWith('Dr.') ? rawName : `Dr. ${rawName}`;
+
+      return res.json({
+        success: true,
+        isDoctor: true,
+        data: {
+          doctor: {
+            id: doctorId,
+            name: cleanDoctorName,
+            specialization: doctorUser?.employee_id?.specialization || 'Dental Surgeon',
+            department: doctorUser?.employee_id?.department || 'Department of Dentistry',
+            employee_id: doctorUser?.employee_id?.employee_id || ''
+          },
+          statistics: {
+            patientsServed: totalPatientsServed,
+            todayPatients: todayPatientsCount,
+            pendingAppointments: pendingAppointmentsCount,
+            todayAppointments: todayAppointmentsCount,
+            completedConsultations: completedConsultationsCount,
+            pendingFollowups: doctorPendingFollowupsCount,
+            monthlyRevenue: monthlyRevenue,
+            selectedMonth: selectedMonthStr
+          },
+          recentPatients: recentVisits,
+          upcomingAppointments: upcomingAppointments,
+          pendingFollowups: doctorPendingFollowups,
+          recentTreatments: recentTreatments,
+          topServices: doctorTopServices,
+          dailyRevenue: doctorDailyRevenueAgg
+        }
+      });
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // CLINIC-WIDE ADMIN / CASHIER DASHBOARD
+    // ─────────────────────────────────────────────────────────────
     const thirtyDaysAgo = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
     const sixMonthsAgo = new Date(today.getFullYear(), today.getMonth() - 5, 1);
 
@@ -44,22 +247,21 @@ export const getDashboardStats = async (req, res, next) => {
     ] = await Promise.all([
       Patient.countDocuments(),
       Patient.countDocuments({ createdAt: { $gte: today, $lte: endToday } }),
-      Patient.countDocuments({ createdAt: { $gte: firstDayOfMonth } }),
+      Patient.countDocuments({ createdAt: { $gte: targetMonthStart, $lte: targetMonthEnd } }),
       Visit.countDocuments(),
       Visit.countDocuments({ visit_date: { $gte: today, $lte: endToday } }),
       Visit.countDocuments({ status: { $in: ['Waiting for Doctor', 'Returning to Doctor'] } }),
       Visit.countDocuments({ status: { $in: ['With Doctor', 'Treatment in Progress'] } }),
-      LabRequest.countDocuments({ status: { $in: ['Payment Required', 'Paid', 'Sample Collected', 'Testing'] } }),
+      LabRequest.countDocuments({ status: { $in: ['Pending', 'Payment Required', 'Paid', 'Sample Collected', 'Testing'] } }),
       Visit.countDocuments({ status: { $in: ['Waiting for Payment', 'Laboratory Payment Required', 'Payment Pending'] } }),
       Appointment.countDocuments({ appointment_date: { $gte: today, $lte: endToday } }),
       Appointment.countDocuments(),
       Payment.find({}),
       Payment.find({ payment_date: { $gte: today, $lte: endToday } }),
-      Payment.find({ payment_date: { $gte: firstDayOfMonth } }),
+      Payment.find({ payment_date: { $gte: targetMonthStart, $lte: targetMonthEnd } }),
       Invoice.find({ balance: { $gt: 0 } }),
       Employee.countDocuments(),
       Employee.countDocuments({ status: 'Active' }),
-      // Top treatments real aggregation
       Treatment.aggregate([
         {
           $group: {
@@ -71,7 +273,6 @@ export const getDashboardStats = async (req, res, next) => {
         { $sort: { count: -1 } },
         { $limit: 6 }
       ]),
-      // Daily revenue for last 7 days
       Payment.aggregate([
         {
           $match: {
@@ -86,7 +287,6 @@ export const getDashboardStats = async (req, res, next) => {
         },
         { $sort: { _id: 1 } }
       ]),
-      // Monthly revenue for last 6 months
       Payment.aggregate([
         {
           $match: {
@@ -109,12 +309,12 @@ export const getDashboardStats = async (req, res, next) => {
     const monthRevenue = monthPayments.reduce((sum, p) => sum + p.amount, 0);
     const totalOutstanding = allUnpaidInvoices.reduce((sum, inv) => sum + (inv.balance || 0), 0);
 
-    // Calculate real patient breakdown
     const newPatientsCount = await Patient.countDocuments({ createdAt: { $gte: thirtyDaysAgo } });
     const returningPatientsCount = Math.max(0, totalPatients - newPatientsCount);
 
     res.json({
       success: true,
+      isDoctor: false,
       data: {
         patients: {
           total: totalPatients,
@@ -140,7 +340,8 @@ export const getDashboardStats = async (req, res, next) => {
           todayRevenue,
           monthRevenue,
           totalOutstanding,
-          unpaidInvoicesCount: allUnpaidInvoices.length
+          unpaidInvoicesCount: allUnpaidInvoices.length,
+          selectedMonth: selectedMonthStr
         },
         employees: {
           total: totalEmployees,
@@ -242,6 +443,89 @@ export const getServiceAnalytics = async (req, res, next) => {
         topLabTests: labAggregation,
         paymentMethods: paymentMethodAgg,
         paymentCategories: paymentCategoryAgg
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const globalSearch = async (req, res, next) => {
+  try {
+    const { q } = req.query;
+    if (!q || !q.trim()) {
+      return res.json({
+        success: true,
+        data: { patients: [], invoices: [], visits: [], services: [] }
+      });
+    }
+
+    const query = q.trim();
+    const regex = new RegExp(query, 'i');
+    const isDoctor = req.user?.role === 'Doctor';
+
+    let patientScope = {};
+    let visitScope = {};
+    let invoiceScope = {};
+
+    if (isDoctor) {
+      const assignedPatientIds = await getDoctorAssignedPatientIds(req.user._id);
+      patientScope = { _id: { $in: assignedPatientIds } };
+      visitScope = { doctor_id: req.user._id };
+      invoiceScope = { doctor_id: req.user._id };
+    }
+
+    const [patients, invoices, visits, services] = await Promise.all([
+      Patient.find({
+        ...patientScope,
+        $or: [
+          { name: regex },
+          { patient_number: regex },
+          { telephone: regex }
+        ]
+      })
+        .limit(5)
+        .select('name patient_number telephone gender'),
+
+      Invoice.find({
+        ...invoiceScope,
+        $or: [
+          { invoice_number: regex }
+        ]
+      })
+        .limit(5)
+        .populate('patient_id', 'name patient_number')
+        .select('invoice_number total_amount balance status patient_id'),
+
+      Visit.find({
+        ...visitScope,
+        $or: [
+          { visit_number: regex },
+          { reason: regex }
+        ]
+      })
+        .limit(5)
+        .populate('patient_id', 'name patient_number')
+        .select('visit_number reason status visit_date patient_id'),
+
+      DentalService.find({
+        $or: [
+          { service_name: regex },
+          { category: regex },
+          { service_code: regex }
+        ]
+      })
+        .limit(5)
+        .select('service_name category price service_code')
+    ]);
+
+    res.json({
+      success: true,
+      data: {
+        patients,
+        invoices,
+        visits,
+        services
       }
     });
   } catch (error) {

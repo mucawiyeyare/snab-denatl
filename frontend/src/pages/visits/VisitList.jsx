@@ -39,8 +39,16 @@ import {
   Ticket,
   Plus,
   UserCheck,
-  UserPlus
+  UserPlus,
+  Send,
+  Users,
+  Sparkles,
+  Lock,
+  AlertTriangle,
+  Percent,
+  ShieldCheck
 } from 'lucide-react';
+import SearchableSelect from '../../components/ui/SearchableSelect.jsx';
 
 const VisitList = () => {
   const { user } = useAuth();
@@ -71,8 +79,11 @@ const VisitList = () => {
   const [isConsultationModalOpen, setIsConsultationModalOpen] = useState(false);
   const [isLabRequestModalOpen, setIsLabRequestModalOpen] = useState(false);
   const [isLabResultModalOpen, setIsLabResultModalOpen] = useState(false);
+  const [isViewLabResultModalOpen, setIsViewLabResultModalOpen] = useState(false);
+  const [viewingLabResultData, setViewingLabResultData] = useState(null);
   const [isTreatmentModalOpen, setIsTreatmentModalOpen] = useState(false);
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+  const [selectedVisitInvoice, setSelectedVisitInvoice] = useState(null);
   const [isReceiptModalOpen, setIsReceiptModalOpen] = useState(false);
   const [isTokenModalOpen, setIsTokenModalOpen] = useState(false);
   const [currentPayment, setCurrentPayment] = useState(null);
@@ -126,10 +137,45 @@ const VisitList = () => {
   const [paymentForm, setPaymentForm] = useState({
     invoice_id: '',
     amount: 0,
+    discount: 0,
     payment_category: 'Consultation Fee',
     payment_method: 'Cash',
     notes: ''
   });
+
+  // Financial computations for the active visit payment modal
+  const visitInvoiceItems = selectedVisitInvoice?.items || [];
+  const vTreatmentItems = visitInvoiceItems.filter(item => ['Treatment', 'Consultation'].includes(item.item_type));
+  const vAdditionalItems = visitInvoiceItems.filter(item => !['Treatment', 'Consultation'].includes(item.item_type));
+  
+  const vTreatmentCost = vTreatmentItems.length > 0
+    ? vTreatmentItems.reduce((acc, item) => acc + (Number(item.total_price) || 0), 0)
+    : Number(selectedVisitInvoice?.subtotal || (paymentForm.payment_category === 'Consultation Fee' ? selectedVisit?.consultation_fee || 3 : 0));
+
+  const vAdditionalCosts = vAdditionalItems.length > 0
+    ? vAdditionalItems.reduce((acc, item) => acc + (Number(item.total_price) || 0), 0)
+    : Math.max(0, Number(selectedVisitInvoice?.subtotal || 0) - vTreatmentCost);
+
+  const vTotalPatientCost = Number(selectedVisitInvoice?.subtotal || (vTreatmentCost + vAdditionalCosts) || (paymentForm.payment_category === 'Consultation Fee' ? selectedVisit?.consultation_fee || 3 : 0));
+  const vPreviouslyPaid = Number(selectedVisitInvoice?.paid_amount || 0);
+  const vApprovedDiscount = Number(selectedVisitInvoice?.discount || 0);
+  
+  // Base Outstanding = Total Patient Cost - Previously Paid - Approved Discounts
+  const vBaseOutstanding = Math.max(0, vTotalPatientCost - vPreviouslyPaid - vApprovedDiscount);
+
+  // Cashier Discount control
+  const vCurrentCashierDiscount = Math.max(0, Number(paymentForm.discount) || 0);
+  const vCashierDiscountExceeded = vCurrentCashierDiscount > vBaseOutstanding + 0.001;
+
+  // Effective Outstanding after applying Cashier discount
+  const vEffectiveOutstanding = Math.max(0, vBaseOutstanding - vCurrentCashierDiscount);
+  const vMaxPaymentAllowed = vEffectiveOutstanding;
+
+  // Paying Now control
+  const vPayingNow = Number(paymentForm.amount) || 0;
+  const vPaymentExceeded = vPayingNow > vMaxPaymentAllowed + 0.001;
+  const vIsZeroPayment = vPayingNow <= 0 && vEffectiveOutstanding > 0;
+  const vRemainingBalance = Math.max(0, vEffectiveOutstanding - vPayingNow);
 
   const [errorMsg, setErrorMsg] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -217,9 +263,12 @@ const VisitList = () => {
   const handleOpenConsultationPayment = async (visit) => {
     const details = await openVisitDetails(visit);
     const invoice = details?.invoices?.[0];
+    setSelectedVisitInvoice(invoice || null);
+    const initialAmount = visit.consultation_fee !== undefined ? visit.consultation_fee : (invoice?.balance || 3);
     setPaymentForm({
       invoice_id: invoice?._id || '',
-      amount: visit.consultation_fee !== undefined ? visit.consultation_fee : (invoice?.balance || 3),
+      amount: initialAmount,
+      discount: 0,
       payment_category: 'Consultation Fee',
       payment_method: 'Cash',
       notes: `Consultation fee for ${visit.visit_number}`
@@ -244,51 +293,29 @@ const VisitList = () => {
     setIsConsultationModalOpen(true);
   };
 
-  // 3. Open Lab Request Form
+  // 3. Open Lab Request Form (Doctor selects tests & clinical reason, does not set prices)
   const handleOpenLabRequest = async (visit) => {
     await openVisitDetails(visit);
     setLabRequestForm({
+      test_ids: [labTests[0]?._id].filter(Boolean),
       test_id: labTests[0]?._id || '',
       reason: 'Pre-treatment screening'
     });
     setIsLabRequestModalOpen(true);
   };
 
-  // 4. Pay Lab Fee
-  const handleOpenLabPayment = async (visit) => {
+  // 4. Doctor Views Completed Lab Results
+  const handleOpenViewLabResult = async (visit) => {
     const details = await openVisitDetails(visit);
-    const unpaidLabReq = details?.labRequests?.find(lr => lr.payment_status === 'Unpaid');
-    const invoice = details?.invoices?.[0];
-    setPaymentForm({
-      invoice_id: invoice?._id || '',
-      amount: unpaidLabReq?.price || 15,
-      payment_category: 'Laboratory Fee',
-      payment_method: 'Cash',
-      notes: `Lab test fee: ${unpaidLabReq?.test_name || 'Laboratory Test'}`
+    setViewingLabResultData({
+      visit,
+      results: details?.labResults || [],
+      requests: details?.labRequests || []
     });
-    setIsPaymentModalOpen(true);
+    setIsViewLabResultModalOpen(true);
   };
 
-  // 5. Open Lab Result Form
-  const handleOpenLabResult = async (visit) => {
-    const details = await openVisitDetails(visit);
-    const pendingReq = details?.labRequests?.find(lr => lr.status !== 'Completed');
-    if (!pendingReq) {
-      alert('No pending laboratory request found for this visit.');
-      return;
-    }
-    setLabResultForm({
-      request_id: pendingReq._id,
-      result: '',
-      reference_range: pendingReq.test_id?.reference_range || '',
-      clinical_interpretation: 'Normal',
-      notes: '',
-      performed_by: user?.full_name || 'Lab Staff'
-    });
-    setIsLabResultModalOpen(true);
-  };
-
-  // 6. Open Treatment Form
+  // 5. Open Treatment Form
   const handleOpenTreatment = async (visit) => {
     await openVisitDetails(visit);
     const defaultSrv = services[0];
@@ -307,10 +334,12 @@ const VisitList = () => {
   const handleOpenFinalPayment = async (visit) => {
     const details = await openVisitDetails(visit);
     const invoice = details?.invoices?.[0];
-    const outstanding = invoice ? invoice.balance : 0;
+    setSelectedVisitInvoice(invoice || null);
+    const outstanding = invoice ? (invoice.balance !== undefined ? invoice.balance : Math.max(0, (invoice.total_amount || 0) - (invoice.paid_amount || 0))) : 0;
     setPaymentForm({
       invoice_id: invoice?._id || '',
       amount: outstanding > 0 ? outstanding : 0,
+      discount: 0,
       payment_category: 'Final Bill / Consolidated',
       payment_method: 'Cash',
       notes: `Final payment for ${visit.visit_number}`
@@ -426,6 +455,19 @@ const VisitList = () => {
 
   const submitPayment = async (e) => {
     e.preventDefault();
+    if (vPaymentExceeded) {
+      setErrorMsg(`Payment amount cannot exceed the patient's outstanding balance of $${vMaxPaymentAllowed.toFixed(2)}.`);
+      return;
+    }
+    if (vCashierDiscountExceeded) {
+      setErrorMsg(`Cashier discount cannot exceed the outstanding balance of $${vBaseOutstanding.toFixed(2)}.`);
+      return;
+    }
+    if (vIsZeroPayment) {
+      setErrorMsg('Payment amount must be greater than $0.00.');
+      return;
+    }
+
     setSubmitting(true);
     setErrorMsg('');
     try {
@@ -585,47 +627,52 @@ const VisitList = () => {
                           {status === 'Waiting for Payment' && (
                             <button
                               onClick={() => handleOpenConsultationPayment(v)}
-                              className="px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-lg transition shadow-2xs text-[11px]"
+                              className="px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-lg transition shadow-2xs text-[11px] cursor-pointer"
                             >
                               💳 Receive Consult Fee (${v.consultation_fee})
                             </button>
                           )}
 
                           {/* 2. If Waiting for Doctor or Consultation Paid -> Start Consultation */}
-                          {(status === 'Waiting for Doctor' || status === 'Consultation Paid' || status === 'With Doctor' || status === 'Returning to Doctor') && (
+                          {(status === 'Waiting for Doctor' || status === 'Consultation Paid' || status === 'With Doctor') && (
                             <button
                               onClick={() => handleOpenConsultation(v)}
-                              className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-lg transition shadow-2xs text-[11px]"
+                              className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-lg transition shadow-2xs text-[11px] cursor-pointer"
                             >
                               🩺 Consult / Diagnosis
                             </button>
                           )}
 
-                          {/* 3. If Laboratory Payment Required -> Pay Lab Fee */}
-                          {status === 'Laboratory Payment Required' && (
-                            <button
-                              onClick={() => handleOpenLabPayment(v)}
-                              className="px-3 py-1.5 bg-orange-600 hover:bg-orange-700 text-white font-bold rounded-lg transition shadow-2xs text-[11px]"
-                            >
-                              💳 Receive Lab Payment
-                            </button>
+                          {/* 3. If Waiting for Laboratory -> In Laboratory / Cashier */}
+                          {(status === 'Waiting for Laboratory' || status === 'Laboratory Payment Required' || status === 'Laboratory Testing') && (
+                            <span className="px-2.5 py-1 text-[11px] font-bold text-purple-700 bg-purple-50 border border-purple-200 rounded-lg flex items-center gap-1">
+                              ⏳ With Cashier (Lab Session)
+                            </span>
                           )}
 
-                          {/* 4. If Laboratory Paid or Waiting for Laboratory -> Enter Lab Result */}
-                          {(status === 'Laboratory Paid' || status === 'Waiting for Laboratory' || status === 'Laboratory Testing') && (
-                            <button
-                              onClick={() => handleOpenLabResult(v)}
-                              className="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-lg transition shadow-2xs text-[11px]"
-                            >
-                              🔬 Enter Lab Result
-                            </button>
+                          {/* 4. If Returning to Doctor -> Doctor Reviews Lab Result & Starts Treatment */}
+                          {status === 'Returning to Doctor' && (
+                            <div className="flex items-center gap-1.5">
+                              <button
+                                onClick={() => handleOpenViewLabResult(v)}
+                                className="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-lg transition shadow-2xs text-[11px] flex items-center gap-1 cursor-pointer"
+                              >
+                                🔬 View Lab Result
+                              </button>
+                              <button
+                                onClick={() => handleOpenTreatment(v)}
+                                className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg transition shadow-2xs text-[11px] flex items-center gap-1 cursor-pointer"
+                              >
+                                🦷 Start Treatment
+                              </button>
+                            </div>
                           )}
 
-                          {/* 5. If Treatment in Progress or Returning to Doctor -> Record Treatment */}
-                          {(status === 'Treatment in Progress' || status === 'Returning to Doctor' || status === 'With Doctor') && (
+                          {/* 5. If Treatment in Progress -> Record Treatment */}
+                          {status === 'Treatment in Progress' && (
                             <button
                               onClick={() => handleOpenTreatment(v)}
-                              className="px-3 py-1.5 bg-teal-600 hover:bg-teal-700 text-white font-bold rounded-lg transition shadow-2xs text-[11px]"
+                              className="px-3 py-1.5 bg-teal-600 hover:bg-teal-700 text-white font-bold rounded-lg transition shadow-2xs text-[11px] cursor-pointer"
                             >
                               🦷 Record Treatment
                             </button>
@@ -635,7 +682,7 @@ const VisitList = () => {
                           {status === 'Payment Pending' && (
                             <button
                               onClick={() => handleOpenFinalPayment(v)}
-                              className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg transition shadow-2xs text-[11px]"
+                              className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg transition shadow-2xs text-[11px] cursor-pointer"
                             >
                               🧾 Finalize & Bill
                             </button>
@@ -847,6 +894,7 @@ const VisitList = () => {
       </Modal>
 
       {/* 2. Specific Lab Request Modal (Multi-select Blood & Lab Tests Supported) */}
+      {/* 2. Doctor Lab Request Modal (Send Patient to Laboratory) */}
       <Modal
         isOpen={isLabRequestModalOpen}
         onClose={() => setIsLabRequestModalOpen(false)}
@@ -857,17 +905,11 @@ const VisitList = () => {
           <div>
             <div className="flex items-center justify-between mb-1.5">
               <label className="font-bold text-slate-700">
-                Select Lab Tests ({labRequestForm.test_ids?.length || 0} selected) *
+                Select Required Lab Tests ({labRequestForm.test_ids?.length || 0} selected) *
               </label>
-              <span className="font-mono font-black text-purple-700">
-                Total: ${labTests
-                  .filter(t => (labRequestForm.test_ids || []).includes(t._id))
-                  .reduce((s, t) => s + t.price, 0)
-                  .toFixed(2)}
-              </span>
             </div>
 
-            {/* Test Category filter quick badges */}
+            {/* Test Selection list (no fixed prices displayed to doctor) */}
             <div className="grid grid-cols-1 gap-2 max-h-52 overflow-y-auto p-2 bg-slate-50 rounded-xl border">
               {labTests.map(t => {
                 const isSelected = (labRequestForm.test_ids || []).includes(t._id);
@@ -881,9 +923,9 @@ const VisitList = () => {
                         : [...current, t._id];
                       setLabRequestForm({ ...labRequestForm, test_ids: next, test_id: next[0] || '' });
                     }}
-                    className={`p-2 rounded-xl border flex items-center justify-between gap-2 cursor-pointer transition ${
+                    className={`p-2.5 rounded-xl border flex items-center justify-between gap-2 cursor-pointer transition ${
                       isSelected
-                        ? 'bg-purple-50 border-purple-300 text-purple-900 shadow-2xs font-bold'
+                        ? 'bg-purple-50 border-purple-400 text-purple-900 shadow-2xs font-bold'
                         : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
                     }`}
                   >
@@ -893,12 +935,9 @@ const VisitList = () => {
                       }`}>
                         {isSelected && <CheckCircle className="w-3.5 h-3.5" />}
                       </div>
-                      <span>{t.test_name}</span>
+                      <span className="font-bold">{t.test_name}</span>
                     </div>
-                    <div className="flex items-center gap-2 font-mono">
-                      <span className="text-[10px] bg-slate-100 px-2 py-0.5 rounded text-slate-600 font-sans">{t.category}</span>
-                      <span className="font-bold text-slate-900">${t.price}</span>
-                    </div>
+                    <span className="text-[10px] bg-slate-100 px-2 py-0.5 rounded text-slate-600 font-sans">{t.category}</span>
                   </div>
                 );
               })}
@@ -920,94 +959,143 @@ const VisitList = () => {
             <button
               type="button"
               onClick={() => setIsLabRequestModalOpen(false)}
-              className="px-4 py-2 bg-slate-100 rounded-xl font-bold"
+              className="px-4 py-2 bg-slate-100 rounded-xl font-bold cursor-pointer"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={submitting || (labRequestForm.test_ids || []).length === 0}
-              className="px-5 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-xl font-bold shadow-md disabled:opacity-50"
+              className="px-5 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-xl font-bold shadow-md disabled:opacity-50 flex items-center gap-1.5 cursor-pointer"
             >
-              {submitting ? 'Requesting...' : `Submit ${(labRequestForm.test_ids || []).length} Lab Tests`}
+              <Send className="w-3.5 h-3.5" />
+              <span>{submitting ? 'Sending...' : 'Send to Laboratory'}</span>
             </button>
           </div>
         </form>
       </Modal>
 
-      {/* 3. Enter Lab Result Modal */}
+      {/* 3. Doctor Views Completed Laboratory Results */}
       <Modal
-        isOpen={isLabResultModalOpen}
-        onClose={() => setIsLabResultModalOpen(false)}
-        title="Record Laboratory Result"
-        maxWidth="max-w-md"
+        isOpen={isViewLabResultModalOpen}
+        onClose={() => setIsViewLabResultModalOpen(false)}
+        title={`Laboratory Result — ${viewingLabResultData?.visit?.patient_id?.name || 'Patient'}`}
+        maxWidth="max-w-lg"
       >
-        <form onSubmit={submitLabResult} className="space-y-4 text-xs">
-          <div>
-            <label className="block font-bold text-slate-700 mb-1">Quantitative / Qualitative Result *</label>
-            <input
-              type="text"
-              required
-              value={labResultForm.result}
-              onChange={(e) => setLabResultForm({ ...labResultForm, result: e.target.value })}
-              placeholder="e.g. 14.2 g/dL, Non-Reactive, Negative, O+ Positive"
-              className="w-full p-2.5 bg-slate-50 border rounded-xl font-mono font-bold text-blue-700"
-            />
+        <div className="space-y-4 text-xs">
+          <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl space-y-1">
+            <div className="flex justify-between items-center">
+              <span className="text-slate-500 font-medium">Patient Name:</span>
+              <span className="font-black text-slate-900 text-sm">{viewingLabResultData?.visit?.patient_id?.name}</span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="text-slate-500 font-medium">Visit Number:</span>
+              <span className="font-mono font-bold text-slate-700">{viewingLabResultData?.visit?.visit_number}</span>
+            </div>
           </div>
 
-          <div>
-            <label className="block font-bold text-slate-700 mb-1">Reference Range</label>
-            <input
-              type="text"
-              value={labResultForm.reference_range}
-              onChange={(e) => setLabResultForm({ ...labResultForm, reference_range: e.target.value })}
-              placeholder="e.g. 12.0 - 16.0 g/dL"
-              className="w-full p-2.5 bg-slate-50 border rounded-xl"
-            />
+          <div className="space-y-3">
+            <h4 className="font-bold text-slate-800 text-xs">Test Outcome(s):</h4>
+            {(viewingLabResultData?.results || []).length === 0 && (viewingLabResultData?.requests || []).length === 0 ? (
+              <p className="text-slate-400 italic text-center py-4">No lab results found for this visit.</p>
+            ) : (
+              (viewingLabResultData?.requests || []).map((req, idx) => {
+                const resObj = viewingLabResultData?.results?.find(r => r.request_id?.toString() === req._id?.toString());
+                const totalCostVal = req.total_cost || req.cost || req.price || resObj?.cost || 0;
+
+                return (
+                  <div key={idx} className="p-4 border border-purple-100 bg-purple-50/30 rounded-2xl space-y-3">
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <span className="text-[10px] font-bold text-purple-700 uppercase tracking-wider block font-mono">
+                          Request #{req.request_number}
+                        </span>
+                        <span className="font-black text-slate-900 text-sm block mt-0.5">
+                          {req.tests?.length > 0 ? `${req.tests.length} Laboratory Tests` : req.test_name}
+                        </span>
+                        <span className="text-[10px] text-slate-400">Clinical Reason: {req.reason || 'Pre-treatment screening'}</span>
+                      </div>
+                      <div className="text-right">
+                        <span className="text-[10px] font-bold text-slate-400 uppercase block">Total Cost</span>
+                        <span className="text-sm font-black font-mono text-purple-900">${Number(totalCostVal).toFixed(2)}</span>
+                      </div>
+                    </div>
+
+                    {/* Individual Test Items Breakdown */}
+                    {(req.tests && req.tests.length > 0) ? (
+                      <div className="space-y-2">
+                        {req.tests.map((t, tIdx) => {
+                          const isPos = t.result?.toLowerCase().includes('positive') || t.result?.toLowerCase().includes('reactive');
+                          const isNeg = t.result?.toLowerCase().includes('negative') || t.result?.toLowerCase().includes('non-reactive');
+
+                          return (
+                            <div key={tIdx} className="p-2.5 bg-white border border-slate-200 rounded-xl flex items-center justify-between gap-3 shadow-2xs">
+                              <div>
+                                <span className="font-bold text-slate-900 text-xs block">{t.test_name}</span>
+                                <span className="text-[10px] text-slate-400">{t.category || 'General'}</span>
+                              </div>
+                              <div className="flex items-center gap-3">
+                                <span className="font-mono text-slate-500 text-xs font-bold">${Number(t.cost || 0).toFixed(2)}</span>
+                                <span className={`px-2.5 py-1 rounded-full text-xs font-black ${
+                                  isPos ? 'bg-rose-100 text-rose-800 border border-rose-200' :
+                                  isNeg ? 'bg-emerald-100 text-emerald-800 border border-emerald-200' :
+                                  'bg-blue-100 text-blue-800 border border-blue-200'
+                                }`}>
+                                  {t.result || 'Pending'}
+                                </span>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <div className="p-2.5 bg-white border border-slate-200 rounded-xl flex items-center justify-between">
+                        <span className="text-slate-500 font-bold">Result:</span>
+                        <span className="px-2.5 py-1 rounded-full text-xs font-black bg-blue-100 text-blue-800">
+                          {req.result || resObj?.result || 'Pending Result'}
+                        </span>
+                      </div>
+                    )}
+
+                    <div className="flex justify-between text-[10px] text-slate-500 pt-1 border-t border-purple-100">
+                      <span>Performed / Entered by: <strong>{req.performed_by || resObj?.performed_by || 'Cashier'}</strong></span>
+                      <span>{new Date(req.completed_date || req.updatedAt).toLocaleDateString()}</span>
+                    </div>
+
+                    {req.notes && (
+                      <p className="text-[11px] text-slate-600 bg-white/80 p-2 rounded-xl border border-slate-100">
+                        <strong>Notes:</strong> {req.notes}
+                      </p>
+                    )}
+                  </div>
+                );
+              })
+            )}
           </div>
 
-          <div>
-            <label className="block font-bold text-slate-700 mb-1">Clinical Interpretation</label>
-            <select
-              value={labResultForm.clinical_interpretation}
-              onChange={(e) => setLabResultForm({ ...labResultForm, clinical_interpretation: e.target.value })}
-              className="w-full p-2.5 bg-slate-50 border rounded-xl font-bold"
-            >
-              <option value="Normal">Normal</option>
-              <option value="Non-Reactive / Negative">Non-Reactive / Negative</option>
-              <option value="Reactive / Positive">Reactive / Positive</option>
-              <option value="Abnormal">Abnormal</option>
-              <option value="Borderline / Inconclusive">Borderline / Inconclusive</option>
-            </select>
-          </div>
-
-          <div>
-            <label className="block font-bold text-slate-700 mb-1">Laboratory Staff Name</label>
-            <input
-              type="text"
-              value={labResultForm.performed_by}
-              onChange={(e) => setLabResultForm({ ...labResultForm, performed_by: e.target.value })}
-              className="w-full p-2.5 bg-slate-50 border rounded-xl"
-            />
-          </div>
-
-          <div className="flex justify-end gap-2 pt-3 border-t">
+          <div className="flex justify-end gap-2 pt-3 border-t border-slate-100">
             <button
               type="button"
-              onClick={() => setIsLabResultModalOpen(false)}
-              className="px-4 py-2 bg-slate-100 rounded-xl font-bold"
+              onClick={() => setIsViewLabResultModalOpen(false)}
+              className="px-4 py-2 bg-slate-100 hover:bg-slate-200 rounded-xl font-bold cursor-pointer"
             >
-              Cancel
+              Close
             </button>
             <button
-              type="submit"
-              disabled={submitting}
-              className="px-5 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-xl font-bold shadow-md"
+              type="button"
+              onClick={() => {
+                const targetVisit = viewingLabResultData?.visit;
+                setIsViewLabResultModalOpen(false);
+                if (targetVisit) {
+                  handleOpenTreatment(targetVisit);
+                }
+              }}
+              className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold shadow-md flex items-center gap-1.5 cursor-pointer"
             >
-              {submitting ? 'Saving Result...' : 'Verify & Send to Doctor'}
+              <span>🦷 Start Treatment</span>
             </button>
           </div>
-        </form>
+        </div>
       </Modal>
 
       {/* 4. Dental Treatment Recording Modal with Multi-teeth FDI Chart & Doctor Discount */}
@@ -1035,17 +1123,20 @@ const VisitList = () => {
                 required
                 value={treatmentForm.service_id}
                 onChange={(e) => {
+                  const val = e.target.value;
+                  const srv = services.find(s => s._id === val);
                   setTreatmentForm({
                     ...treatmentForm,
-                    service_id: e.target.value
+                    service_id: val,
+                    price: srv?.price !== undefined ? srv.price : treatmentForm.price
                   });
                 }}
-                className="w-full p-2.5 bg-slate-50 border rounded-xl font-bold"
+                className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition cursor-pointer"
               >
-                <option value="">-- Choose Procedure --</option>
-                {services.map(s => (
+                <option value="">-- Select Dental Procedure --</option>
+                {services.map((s) => (
                   <option key={s._id} value={s._id}>
-                    {s.service_name}
+                    {s.service_name} — ${Number(s.price).toFixed(2)} ({s.category})
                   </option>
                 ))}
               </select>
@@ -1121,51 +1212,161 @@ const VisitList = () => {
       <Modal
         isOpen={isPaymentModalOpen}
         onClose={() => setIsPaymentModalOpen(false)}
-        title={`Process Payment: ${paymentForm.payment_category}`}
-        maxWidth="max-w-md"
+        icon={Receipt}
+        title={`Cashier POS: Receive Payment — ${paymentForm.payment_category}`}
+        subtitle="Collect payment against approved invoice balance. Invoices cannot be modified or increased here."
+        maxWidth="max-w-xl"
       >
         <form onSubmit={submitPayment} className="space-y-4 text-xs">
-          <div className="p-3 bg-slate-50 rounded-xl border space-y-1">
-            <p className="text-slate-500">Patient: <span className="font-bold text-slate-900">{selectedVisit?.patient_id?.name}</span></p>
-            <p className="text-slate-500">Visit No: <span className="font-mono font-bold text-slate-900">{selectedVisit?.visit_number}</span></p>
-          </div>
+          {errorMsg && (
+            <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-rose-700 text-xs font-bold flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 shrink-0" />
+              <span>{errorMsg}</span>
+            </div>
+          )}
 
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block font-bold text-slate-700 mb-1">Amount to Pay ($) *</label>
-              <input
-                type="number"
-                required
-                min="0.01"
-                step="0.01"
-                value={paymentForm.amount}
-                onChange={(e) => setPaymentForm({ ...paymentForm, amount: e.target.value })}
-                className="w-full p-2.5 bg-slate-50 border rounded-xl font-mono font-black text-lg text-emerald-700"
-              />
+          {/* 1. Patient Financial Summary Card */}
+          <div className="bg-slate-900 text-white p-4 rounded-2xl shadow-md space-y-3">
+            <div className="flex justify-between items-center pb-2 border-b border-slate-800">
+              <div>
+                <span className="text-[10px] uppercase font-bold tracking-wider text-slate-400">Patient Account</span>
+                <p className="text-sm font-black text-white">{selectedVisit?.patient_id?.name || 'Walk-in Patient'}</p>
+                <p className="text-[11px] text-slate-400 font-mono">
+                  {selectedVisit?.patient_id?.patient_number || ''} • Visit: {selectedVisit?.visit_number}
+                </p>
+              </div>
+              <div className="text-right">
+                <span className="text-[10px] uppercase font-bold tracking-wider text-slate-400">Category</span>
+                <p className="text-xs font-bold text-amber-400">{paymentForm.payment_category}</p>
+              </div>
             </div>
 
-            <div>
-              <label className="block font-bold text-emerald-700 mb-1">Cashier Discount ($)</label>
-              <input
-                type="number"
-                min="0"
-                value={paymentForm.discount || 0}
-                onChange={(e) => setPaymentForm({ ...paymentForm, discount: e.target.value })}
-                className="w-full p-2.5 bg-emerald-50/60 border border-emerald-200 rounded-xl font-mono font-bold text-emerald-800"
-              />
+            {/* Financial Metrics Grid */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1">
+              <div className="p-2.5 bg-slate-800/80 rounded-xl border border-slate-800">
+                <span className="text-[10px] text-slate-400 block font-bold">Total Treatment</span>
+                <span className="font-mono font-bold text-xs text-slate-200">${vTreatmentCost.toFixed(2)}</span>
+              </div>
+              <div className="p-2.5 bg-slate-800/80 rounded-xl border border-slate-800">
+                <span className="text-[10px] text-slate-400 block font-bold">Additional Costs</span>
+                <span className="font-mono font-bold text-xs text-slate-200">${vAdditionalCosts.toFixed(2)}</span>
+              </div>
+              <div className="p-2.5 bg-slate-800/80 rounded-xl border border-slate-800">
+                <span className="text-[10px] text-slate-400 block font-bold">Total Patient Cost</span>
+                <span className="font-mono font-black text-xs text-white">${vTotalPatientCost.toFixed(2)}</span>
+              </div>
+              <div className="p-2.5 bg-slate-800/80 rounded-xl border border-slate-800">
+                <span className="text-[10px] text-slate-400 block font-bold">Previously Paid</span>
+                <span className="font-mono font-bold text-xs text-emerald-400">${vPreviouslyPaid.toFixed(2)}</span>
+              </div>
+            </div>
+
+            {/* Outstanding Balance Banner */}
+            <div className="p-3 bg-slate-800 rounded-xl flex justify-between items-center border border-slate-700/80">
+              <div>
+                <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Current Outstanding Balance</span>
+                {vApprovedDiscount > 0 && (
+                  <span className="text-[10px] text-emerald-400 block font-semibold">Includes previous discount: ${vApprovedDiscount.toFixed(2)}</span>
+                )}
+              </div>
+              <span className={`font-mono text-lg font-black ${
+                vEffectiveOutstanding > 0 ? 'text-rose-400' : 'text-emerald-400'
+              }`}>
+                ${vEffectiveOutstanding.toFixed(2)}
+              </span>
             </div>
           </div>
 
+          {/* 2. Payment Amount & Cashier Discount Input Fields */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {/* Payment Amount */}
+            <div>
+              <div className="flex justify-between items-center mb-1">
+                <label className="font-bold text-slate-700">Payment Amount ($) *</label>
+                <span className="text-[10px] font-bold text-slate-400 font-mono">Max: ${vMaxPaymentAllowed.toFixed(2)}</span>
+              </div>
+              <div className="relative">
+                <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                <input
+                  type="number"
+                  min="0.01"
+                  max={vMaxPaymentAllowed}
+                  step="0.01"
+                  required
+                  disabled={vEffectiveOutstanding <= 0}
+                  value={paymentForm.amount}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setPaymentForm({ ...paymentForm, amount: val });
+                  }}
+                  placeholder="0.00"
+                  className={`w-full pl-9 pr-3.5 py-2.5 rounded-xl font-mono font-black text-base transition border ${
+                    vPaymentExceeded
+                      ? 'border-rose-500 bg-rose-50/50 text-rose-700 ring-1 ring-rose-500'
+                      : 'border-slate-200 bg-white text-emerald-700 focus:border-emerald-500 focus:outline-none'
+                  }`}
+                />
+              </div>
+              {vPaymentExceeded && (
+                <div className="p-2 mt-1.5 bg-rose-50 border border-rose-200 rounded-xl text-rose-700 font-bold text-[11px] flex items-start gap-1.5">
+                  <AlertTriangle className="w-4 h-4 shrink-0 text-rose-600 mt-0.5" />
+                  <span>Payment amount cannot exceed the patient’s outstanding balance of ${vMaxPaymentAllowed.toFixed(2)}.</span>
+                </div>
+              )}
+            </div>
+
+            {/* Cashier Discount */}
+            <div>
+              <div className="flex justify-between items-center mb-1">
+                <label className="font-bold text-emerald-800">Cashier Discount ($)</label>
+                <span className="text-[10px] font-bold text-slate-400 font-mono">Max: ${vBaseOutstanding.toFixed(2)}</span>
+              </div>
+              <div className="relative">
+                <Percent className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-emerald-500" />
+                <input
+                  type="number"
+                  min="0"
+                  max={vBaseOutstanding}
+                  step="0.01"
+                  value={paymentForm.discount || ''}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    const numDiscount = Number(val) || 0;
+                    const newMax = Math.max(0, vBaseOutstanding - numDiscount);
+                    setPaymentForm({
+                      ...paymentForm,
+                      discount: val,
+                      amount: Number(paymentForm.amount) > newMax ? (newMax > 0 ? newMax : 0) : paymentForm.amount
+                    });
+                  }}
+                  placeholder="0.00"
+                  className={`w-full pl-9 pr-3.5 py-2.5 rounded-xl font-mono font-bold text-base transition border ${
+                    vCashierDiscountExceeded
+                      ? 'border-rose-500 bg-rose-50/50 text-rose-700 ring-1 ring-rose-500'
+                      : 'border-emerald-200 bg-emerald-50/40 text-emerald-900 focus:border-emerald-500 focus:outline-none'
+                  }`}
+                />
+              </div>
+              {vCashierDiscountExceeded && (
+                <div className="p-2 mt-1.5 bg-rose-50 border border-rose-200 rounded-xl text-rose-700 font-bold text-[11px] flex items-start gap-1.5">
+                  <AlertTriangle className="w-4 h-4 shrink-0 text-rose-600 mt-0.5" />
+                  <span>Discount cannot exceed the outstanding balance of ${vBaseOutstanding.toFixed(2)}.</span>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Payment Method */}
           <div>
             <label className="block font-bold text-slate-700 mb-1">Payment Method *</label>
             <select
               value={paymentForm.payment_method}
               onChange={(e) => setPaymentForm({ ...paymentForm, payment_method: e.target.value })}
-              className="w-full p-2.5 bg-slate-50 border rounded-xl font-bold"
+              className="w-full p-2.5 bg-white border border-slate-200 rounded-xl font-bold text-slate-900 focus:outline-none focus:border-blue-500 cursor-pointer"
             >
               <option value="Cash">💵 Cash</option>
               <option value="Mobile Payment">📱 Mobile Payment (EVC Plus / Zaad / Sahal)</option>
-              <option value="Card">💳 Credit / Debit Card</option>
+              <option value="Card">💳 Credit / Debit Card (POS)</option>
               <option value="Bank Transfer">🏦 Bank Transfer</option>
             </select>
           </div>
@@ -1177,24 +1378,83 @@ const VisitList = () => {
               value={paymentForm.notes}
               onChange={(e) => setPaymentForm({ ...paymentForm, notes: e.target.value })}
               placeholder="e.g. Paid at reception desk"
-              className="w-full p-2.5 bg-slate-50 border rounded-xl"
+              className="w-full p-2.5 bg-white border border-slate-200 rounded-xl font-medium"
             />
           </div>
 
-          <div className="flex justify-end gap-2 pt-3 border-t">
+          {/* 3. Paying Now Breakdown & Confirmation Card */}
+          <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-2xl space-y-2">
+            <div className="flex justify-between items-center pb-1.5 border-b border-slate-200/80">
+              <span className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                <ShieldCheck className="w-4 h-4 text-emerald-600" />
+                <span>Payment Summary</span>
+              </span>
+              <span className="text-[10px] text-slate-400 font-medium">Review prior to confirmation</span>
+            </div>
+
+            <div className="space-y-1.5 font-medium text-slate-600 text-xs">
+              <div className="flex justify-between">
+                <span>Patient:</span>
+                <span className="font-bold text-slate-900">{selectedVisit?.patient_id?.name || 'Walk-in Patient'}</span>
+              </div>
+              <div className="flex justify-between">
+                <span>Total Patient Cost:</span>
+                <span className="font-mono text-slate-900">${vTotalPatientCost.toFixed(2)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span>Previously Paid:</span>
+                <span className="font-mono text-emerald-700">${vPreviouslyPaid.toFixed(2)}</span>
+              </div>
+              {(vApprovedDiscount > 0 || vCurrentCashierDiscount > 0) && (
+                <div className="flex justify-between">
+                  <span>Discount:</span>
+                  <span className="font-mono text-emerald-700 font-bold">-${(vApprovedDiscount + vCurrentCashierDiscount).toFixed(2)}</span>
+                </div>
+              )}
+              <div className="flex justify-between">
+                <span>Outstanding Balance:</span>
+                <span className="font-mono font-bold text-slate-900">${vBaseOutstanding.toFixed(2)}</span>
+              </div>
+              <div className="flex justify-between pt-1.5 border-t border-slate-200 text-purple-950 font-bold">
+                <span>Paying Now:</span>
+                <span className="font-mono text-sm font-black text-purple-700">${vPayingNow.toFixed(2)}</span>
+              </div>
+              <div className="flex justify-between text-slate-900 font-bold">
+                <span>Balance Remaining:</span>
+                <span className={`font-mono text-sm font-black ${vRemainingBalance > 0 ? 'text-rose-600' : 'text-emerald-600'}`}>
+                  ${vRemainingBalance.toFixed(2)}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* 4. Prevent Unauthorized Increase Notice */}
+          <div className="p-3 bg-amber-50/80 border border-amber-200 rounded-2xl flex items-start gap-2.5 text-amber-900">
+            <Lock className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
+            <div>
+              <p className="font-bold text-xs text-amber-950">Invoice Change Required</p>
+              <p className="text-[10px] text-amber-800 leading-relaxed mt-0.5">
+                The patient's invoice must be updated by an authorized staff member before this additional charge can be collected. Cashiers cannot modify base treatment costs or increase invoice amounts from this screen.
+              </p>
+            </div>
+          </div>
+
+          {/* Action Buttons */}
+          <div className="flex justify-end gap-2.5 pt-2 border-t border-slate-100">
             <button
               type="button"
               onClick={() => setIsPaymentModalOpen(false)}
-              className="px-4 py-2 bg-slate-100 rounded-xl font-bold"
+              className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs transition cursor-pointer"
             >
               Cancel
             </button>
             <button
               type="submit"
-              disabled={submitting}
-              className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold shadow-md"
+              disabled={submitting || vPaymentExceeded || vCashierDiscountExceeded || vIsZeroPayment || vEffectiveOutstanding <= 0}
+              className="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 active:scale-[0.99] text-white font-bold text-xs rounded-xl shadow-md transition cursor-pointer flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {submitting ? 'Processing...' : 'Confirm Payment & Generate Receipt'}
+              <Receipt className="w-4 h-4" />
+              <span>{submitting ? 'Processing...' : 'Confirm & Print Receipt'}</span>
             </button>
           </div>
         </form>
@@ -1230,20 +1490,30 @@ const VisitList = () => {
           )}
 
           <div>
-            <label className="block font-bold text-slate-700 mb-1">Select Patient *</label>
-            <select
+            <SearchableSelect
+              label="Select Patient"
               required
+              icon={Users}
+              placeholder="-- Search & Select Registered Patient --"
+              searchPlaceholder="Search by patient name, telephone, or ID..."
               value={newVisitForm.patient_id}
-              onChange={(e) => setNewVisitForm({ ...newVisitForm, patient_id: e.target.value })}
-              className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-900 focus:bg-white focus:ring-2 focus:ring-blue-500"
-            >
-              <option value="">-- Choose Registered Patient --</option>
-              {patientsList.map(p => (
-                <option key={p._id} value={p._id}>
-                  {p.name} ({p.patient_number} • {p.telephone})
-                </option>
-              ))}
-            </select>
+              onChange={(val) => setNewVisitForm({ ...newVisitForm, patient_id: val })}
+              onSearch={async (q) => {
+                const res = await getPatientsApi({ search: q, limit: 30 });
+                return (res.data?.data || []).map(p => ({
+                  value: p._id,
+                  label: p.name,
+                  sublabel: `${p.patient_number} • ${p.telephone}`,
+                  badge: p.gender
+                }));
+              }}
+              options={patientsList.map(p => ({
+                value: p._id,
+                label: p.name,
+                sublabel: `${p.patient_number} • ${p.telephone}`,
+                badge: p.gender
+              }))}
+            />
           </div>
 
           <div>
@@ -1287,15 +1557,15 @@ const VisitList = () => {
           )}
 
           <div>
-            <label className="block font-bold text-slate-700 mb-1">Select Doctor *</label>
+            <label className="block font-bold text-slate-700 mb-1">Select Attending Doctor *</label>
             <select
               required
               value={newVisitForm.doctor_id}
               onChange={(e) => setNewVisitForm({ ...newVisitForm, doctor_id: e.target.value })}
-              className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold text-blue-900 focus:bg-white focus:ring-2 focus:ring-blue-500"
+              className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition cursor-pointer"
             >
-              <option value="">-- Assign Attending Doctor --</option>
-              {doctorsList.map(d => (
+              <option value="">-- Select Attending Doctor --</option>
+              {doctorsList.map((d) => (
                 <option key={d._id} value={d._id}>
                   Dr. {d.full_name || d.username} ({d.employee_id?.specialization || 'Dental Surgeon'})
                 </option>

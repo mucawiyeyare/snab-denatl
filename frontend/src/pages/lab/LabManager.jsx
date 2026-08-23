@@ -5,23 +5,57 @@ import {
   getLabResultsApi,
   getLabTestsApi,
   createLabRequestApi,
-  createLabResultApi,
+  processLabSessionApi,
   createLabTestApi,
   updateLabTestApi,
   deleteLabTestApi,
+  deleteLabRequestApi,
   getVisitsApi
 } from '../../api/endpoints.js';
 import StatusBadge from '../../components/ui/StatusBadge.jsx';
 import Modal from '../../components/ui/Modal.jsx';
-import { TestTube2, Search, Plus, CheckCircle, Clock, AlertCircle, FileText, CheckSquare, Square, Stethoscope, Edit2, Trash2 } from 'lucide-react';
+import {
+  TestTube2,
+  Search,
+  Plus,
+  CheckCircle,
+  Clock,
+  AlertCircle,
+  FileText,
+  DollarSign,
+  Send,
+  User,
+  Stethoscope,
+  Edit2,
+  Trash2,
+  Calendar,
+  Sparkles,
+  ArrowRight,
+  Users
+} from 'lucide-react';
+import SearchableSelect from '../../components/ui/SearchableSelect.jsx';
+
+const COMMON_RESULTS = [
+  'Negative',
+  'Positive',
+  'Non-Reactive',
+  'Reactive',
+  'Normal',
+  'O+',
+  'A+',
+  'B+',
+  'AB+'
+];
 
 const LabManager = () => {
   const { user } = useAuth();
   const isAdmin = user?.role === 'Admin';
+  const isCashier = user?.role === 'Receptionist/Cashier' || user?.role === 'Admin';
 
-  const [activeTab, setActiveTab] = useState('requests');
+  const [activeTab, setActiveTab] = useState('pending');
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [notificationMsg, setNotificationMsg] = useState('');
 
   // Data
   const [requests, setRequests] = useState([]);
@@ -29,24 +63,23 @@ const LabManager = () => {
   const [tests, setTests] = useState([]);
   const [activeVisits, setActiveVisits] = useState([]);
 
-  // Batch / Multi-Blood Request Modal
-  const [isBatchModalOpen, setIsBatchModalOpen] = useState(false);
-  const [batchVisitId, setBatchVisitId] = useState('');
-  const [batchSelectedTestIds, setBatchSelectedTestIds] = useState([]);
-  const [batchReason, setBatchReason] = useState('Diagnostic blood panel & pre-treatment screening');
+  // 1. Doctor's Lab Request Modal
+  const [isRequestModalOpen, setIsRequestModalOpen] = useState(false);
+  const [requestVisitId, setRequestVisitId] = useState('');
+  const [requestSelectedTestIds, setRequestSelectedTestIds] = useState([]);
+  const [requestReason, setRequestReason] = useState('Pre-treatment screening');
 
-  // Result entry modal
-  const [isResultModalOpen, setIsResultModalOpen] = useState(false);
+  // 2. Cashier's Manual Lab Session Modal (Cost + Result + Send to Doctor)
+  const [isSessionModalOpen, setIsSessionModalOpen] = useState(false);
   const [selectedRequest, setSelectedRequest] = useState(null);
-  const [resultForm, setResultForm] = useState({
-    result: '',
-    reference_range: '',
-    clinical_interpretation: 'Normal',
+  const [sessionTests, setSessionTests] = useState([]);
+  const [sessionForm, setSessionForm] = useState({
     notes: '',
-    performed_by: ''
+    payment_method: 'Cash',
+    mark_paid: true
   });
 
-  // Test catalog modal (Add & Edit)
+  // 3. Test Catalog Modal (Add & Edit Tests)
   const [isTestModalOpen, setIsTestModalOpen] = useState(false);
   const [editingTest, setEditingTest] = useState(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState(null);
@@ -86,32 +119,29 @@ const LabManager = () => {
     }
   };
 
-  const handleToggleTestInBatch = (testId) => {
-    if (batchSelectedTestIds.includes(testId)) {
-      setBatchSelectedTestIds(batchSelectedTestIds.filter(id => id !== testId));
+  // --- Doctor Sends Patient to Laboratory ---
+  const handleOpenDoctorRequestModal = () => {
+    setRequestVisitId(activeVisits[0]?._id || '');
+    setRequestSelectedTestIds([]);
+    setRequestReason('Pre-treatment screening');
+    setIsRequestModalOpen(true);
+  };
+
+  const handleToggleTestInRequest = (testId) => {
+    if (requestSelectedTestIds.includes(testId)) {
+      setRequestSelectedTestIds(requestSelectedTestIds.filter((id) => id !== testId));
     } else {
-      setBatchSelectedTestIds([...batchSelectedTestIds, testId]);
+      setRequestSelectedTestIds([...requestSelectedTestIds, testId]);
     }
   };
 
-  const handleSelectAllCategory = (cat) => {
-    const catTestIds = tests.filter(t => t.category === cat).map(t => t._id);
-    const allSelected = catTestIds.every(id => batchSelectedTestIds.includes(id));
-    if (allSelected) {
-      setBatchSelectedTestIds(batchSelectedTestIds.filter(id => !catTestIds.includes(id)));
-    } else {
-      const combined = Array.from(new Set([...batchSelectedTestIds, ...catTestIds]));
-      setBatchSelectedTestIds(combined);
-    }
-  };
-
-  const submitBatchLabRequest = async (e) => {
+  const submitDoctorLabRequest = async (e) => {
     e.preventDefault();
-    if (!batchVisitId) {
+    if (!requestVisitId) {
       alert('Please select a patient visit');
       return;
     }
-    if (batchSelectedTestIds.length === 0) {
+    if (requestSelectedTestIds.length === 0) {
       alert('Please select at least one laboratory test');
       return;
     }
@@ -119,51 +149,101 @@ const LabManager = () => {
     setSubmitting(true);
     try {
       await createLabRequestApi({
-        visit_id: batchVisitId,
-        test_ids: batchSelectedTestIds,
-        reason: batchReason
+        visit_id: requestVisitId,
+        test_ids: requestSelectedTestIds,
+        reason: requestReason
       });
-      setIsBatchModalOpen(false);
-      setBatchSelectedTestIds([]);
-      setBatchVisitId('');
+      setIsRequestModalOpen(false);
+      setRequestSelectedTestIds([]);
+      setRequestVisitId('');
       fetchLabData();
+      showToast('Patient sent to Laboratory / Cashier session!');
     } catch (err) {
-      console.error('Error creating batch lab request:', err);
-      alert(err.response?.data?.message || 'Error creating lab tests');
+      console.error('Error creating lab request:', err);
+      alert(err.response?.data?.message || 'Error sending to laboratory');
     } finally {
       setSubmitting(false);
     }
   };
 
-  const handleOpenEnterResult = (req) => {
+  // --- Cashier Manages Manual Session ---
+  const handleOpenSessionModal = (req) => {
     setSelectedRequest(req);
-    setResultForm({
-      result: '',
-      reference_range: req.test_id?.reference_range || '',
-      clinical_interpretation: 'Normal',
-      notes: '',
-      performed_by: user?.full_name || 'Laboratory Staff'
+    const testList = (req.tests && req.tests.length > 0)
+      ? req.tests.map((t) => ({
+          test_id: t.test_id?._id || t.test_id || t._id,
+          test_name: t.test_name,
+          category: t.category || '',
+          sample_type: t.sample_type || '',
+          reference_range: t.reference_range || '',
+          cost: t.cost !== undefined && t.cost !== null && t.cost !== 0 ? t.cost : (t.price || ''),
+          result: t.result || '',
+          clinical_interpretation: t.clinical_interpretation || 'Normal'
+        }))
+      : [
+          {
+            test_id: req.test_id?._id || req.test_id,
+            test_name: req.test_name || 'Laboratory Test',
+            category: req.test_id?.category || '',
+            sample_type: req.test_id?.sample_type || '',
+            reference_range: '',
+            cost: req.cost || req.price || '',
+            result: req.result || '',
+            clinical_interpretation: 'Normal'
+          }
+        ];
+
+    setSessionTests(testList);
+    setSessionForm({
+      notes: req.notes || '',
+      payment_method: 'Cash',
+      mark_paid: true
     });
-    setIsResultModalOpen(true);
+    setIsSessionModalOpen(true);
   };
 
-  const submitResult = async (e) => {
+  const submitCashierSession = async (e) => {
     e.preventDefault();
+    
+    // Check if at least one test has result
+    const hasAnyResult = sessionTests.some(t => t.result && t.result.trim());
+    if (!hasAnyResult) {
+      alert('Please enter at least one test result before submitting to the doctor.');
+      return;
+    }
+
     setSubmitting(true);
     try {
-      await createLabResultApi({
-        request_id: selectedRequest._id,
-        ...resultForm
+      await processLabSessionApi(selectedRequest._id, {
+        tests: sessionTests,
+        notes: sessionForm.notes,
+        payment_method: sessionForm.payment_method,
+        mark_paid: sessionForm.mark_paid
       });
-      setIsResultModalOpen(false);
+      setIsSessionModalOpen(false);
+      setSelectedRequest(null);
       fetchLabData();
+      showToast(`Laboratory request completed for ${selectedRequest.patient_id?.name || 'patient'} and sent to Doctor!`);
     } catch (err) {
-      console.error('Error recording result:', err);
+      console.error('Error processing lab session:', err);
+      alert(err.response?.data?.message || 'Error processing session');
     } finally {
       setSubmitting(false);
     }
   };
 
+  const handleDeleteRequest = async (id) => {
+    if (!window.confirm('Are you sure you want to cancel this laboratory request?')) return;
+    try {
+      await deleteLabRequestApi(id);
+      fetchLabData();
+      showToast('Laboratory request cancelled.');
+    } catch (err) {
+      alert(err.response?.data?.message || 'Error deleting request');
+    }
+  };
+
+  // --- Test Catalog Actions (Admin) ---
   const handleOpenAddTest = () => {
     setEditingTest(null);
     setTestForm({
@@ -203,7 +283,7 @@ const LabManager = () => {
     }
   };
 
-  const submitTest = async (e) => {
+  const submitTestCatalog = async (e) => {
     e.preventDefault();
     if (!testForm.test_name?.trim()) {
       alert('Please enter a test or disease name');
@@ -213,10 +293,6 @@ const LabManager = () => {
       alert('Please enter or select a disease category');
       return;
     }
-    if (testForm.price === '' || isNaN(Number(testForm.price))) {
-      alert('Please enter a valid price');
-      return;
-    }
 
     setSubmitting(true);
     try {
@@ -224,7 +300,7 @@ const LabManager = () => {
         ...testForm,
         test_name: testForm.test_name.trim(),
         category: testForm.category.trim(),
-        price: Number(testForm.price)
+        price: testForm.price !== '' ? Number(testForm.price) : 0
       };
 
       if (editingTest) {
@@ -235,6 +311,7 @@ const LabManager = () => {
       setIsTestModalOpen(false);
       setEditingTest(null);
       fetchLabData();
+      showToast(editingTest ? 'Lab test updated!' : 'New lab test added to catalog!');
     } catch (err) {
       console.error('Error saving lab test:', err);
       alert(err.response?.data?.message || 'Error saving lab test');
@@ -243,118 +320,251 @@ const LabManager = () => {
     }
   };
 
-  const selectedTestsTotal = tests
-    .filter(t => batchSelectedTestIds.includes(t._id))
-    .reduce((sum, t) => sum + t.price, 0);
+  const showToast = (msg) => {
+    setNotificationMsg(msg);
+    setTimeout(() => setNotificationMsg(''), 5000);
+  };
+
+  // Filtered requests
+  const pendingRequests = requests.filter(
+    (r) => r.status === 'Pending' || r.status === 'Payment Required' || r.status === 'Requested'
+  );
+  const completedRequests = requests.filter((r) => r.status === 'Completed');
+
+  const filteredPending = pendingRequests.filter((r) => {
+    if (!search.trim()) return true;
+    const q = search.toLowerCase();
+    return (
+      r.patient_id?.name?.toLowerCase().includes(q) ||
+      r.patient_id?.telephone?.toLowerCase().includes(q) ||
+      r.patient_id?.patient_number?.toLowerCase().includes(q) ||
+      r.test_name?.toLowerCase().includes(q) ||
+      r.doctor_id?.full_name?.toLowerCase().includes(q)
+    );
+  });
+
+  const filteredCompleted = completedRequests.filter((r) => {
+    if (!search.trim()) return true;
+    const q = search.toLowerCase();
+    return (
+      r.patient_id?.name?.toLowerCase().includes(q) ||
+      r.test_name?.toLowerCase().includes(q) ||
+      r.result?.toLowerCase().includes(q) ||
+      r.doctor_id?.full_name?.toLowerCase().includes(q)
+    );
+  });
 
   return (
     <div className="space-y-6">
       
-      {/* Header */}
+      {/* Toast Notification Banner */}
+      {notificationMsg && (
+        <div className="p-3.5 bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-bold rounded-2xl flex items-center gap-2.5 shadow-sm">
+          <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0" />
+          <span>{notificationMsg}</span>
+        </div>
+      )}
+
+      {/* Top Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h1 className="text-2xl font-black text-slate-900 tracking-tight">Laboratory Management</h1>
-          <p className="text-xs text-slate-500">Manage pre-treatment diagnostic testing, infectious disease screening, and lab results</p>
+          <h1 className="text-2xl font-black text-slate-900 tracking-tight">Laboratory Sessions</h1>
+          <p className="text-xs text-slate-500">
+            Simple manual laboratory workflow: <strong className="text-blue-600">Doctor → Cashier → Doctor</strong>
+          </p>
         </div>
 
         <div className="flex items-center gap-2">
           <button
-            onClick={() => setIsBatchModalOpen(true)}
-            className="flex items-center gap-2 px-4 py-2.5 bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold rounded-xl shadow-md transition cursor-pointer"
+            onClick={handleOpenDoctorRequestModal}
+            className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 active:scale-95 text-white text-xs font-bold rounded-xl shadow-md transition cursor-pointer"
           >
-            <TestTube2 className="w-4 h-4" />
-            Order Multi-Blood Tests
+            <Stethoscope className="w-4 h-4" />
+            Request Lab Test
           </button>
 
           {isAdmin && (
             <button
               onClick={handleOpenAddTest}
-              className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl shadow-md transition cursor-pointer"
+              className="flex items-center gap-2 px-4 py-2.5 bg-white hover:bg-slate-50 text-slate-700 text-xs font-bold rounded-xl border border-slate-200 shadow-xs transition cursor-pointer"
             >
-              <Plus className="w-4 h-4" />
-              Add Lab Test
+              <Plus className="w-4 h-4 text-blue-600" />
+              Add Test to Catalog
             </button>
           )}
         </div>
       </div>
 
-      {/* Tabs */}
-      <div className="flex gap-2 border-b border-slate-200 pb-2">
-        {[
-          { id: 'requests', label: `Pending Requests (${requests.filter(r => r.status !== 'Completed').length})` },
-          { id: 'results', label: `Completed Results Archive (${results.length})` },
-          { id: 'catalog', label: `Laboratory Tests Catalog (${tests.length})` }
-        ].map(tab => (
-          <button
-            key={tab.id}
-            onClick={() => setActiveTab(tab.id)}
-            className={`px-4 py-2.5 rounded-xl text-xs font-bold transition cursor-pointer ${
-              activeTab === tab.id
-                ? 'bg-purple-600 text-white shadow-md shadow-purple-500/20'
-                : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
-            }`}
-          >
-            {tab.label}
-          </button>
-        ))}
+      {/* Simple Workflow Step Indicator */}
+      <div className="bg-white p-3.5 rounded-2xl border border-slate-100 shadow-xs">
+        <div className="flex items-center justify-between text-[11px] font-bold text-slate-400 overflow-x-auto min-w-[650px] px-2">
+          <div className="flex items-center gap-2 text-blue-600">
+            <span className="w-5 h-5 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-[10px] font-black">1</span>
+            <span>Doctor Requests Test</span>
+          </div>
+          <ArrowRight className="w-3.5 h-3.5 text-slate-300" />
+          <div className="flex items-center gap-2 text-purple-600 font-black">
+            <span className="w-5 h-5 rounded-full bg-purple-100 text-purple-700 flex items-center justify-center text-[10px] font-black">2</span>
+            <span>Cashier Enters Cost & Result</span>
+          </div>
+          <ArrowRight className="w-3.5 h-3.5 text-slate-300" />
+          <div className="flex items-center gap-2 text-emerald-600">
+            <span className="w-5 h-5 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center text-[10px] font-black">3</span>
+            <span>Result Sent to Doctor & Billed</span>
+          </div>
+          <ArrowRight className="w-3.5 h-3.5 text-slate-300" />
+          <div className="flex items-center gap-2 text-teal-600">
+            <span className="w-5 h-5 rounded-full bg-teal-100 text-teal-700 flex items-center justify-center text-[10px] font-black">4</span>
+            <span>Doctor Starts Treatment</span>
+          </div>
+        </div>
       </div>
 
-      {/* Tab 1: Requests */}
-      {activeTab === 'requests' && (
+      {/* Navigation Tabs */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+        <div className="flex gap-2">
+          {[
+            { id: 'pending', label: `Pending Sessions (${pendingRequests.length})`, count: pendingRequests.length },
+            { id: 'completed', label: `Completed Archive (${completedRequests.length})`, count: completedRequests.length },
+            { id: 'catalog', label: `Tests Catalog (${tests.length})`, count: tests.length }
+          ].map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={`px-4 py-2.5 rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-2 ${
+                activeTab === tab.id
+                  ? 'bg-blue-600 text-white shadow-md shadow-blue-500/20'
+                  : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'
+              }`}
+            >
+              <span>{tab.label}</span>
+            </button>
+          ))}
+        </div>
+
+        {/* Search Bar */}
+        <div className="w-full sm:w-80 bg-white p-2.5 rounded-2xl border border-slate-200 shadow-2xs flex items-center gap-2">
+          <Search className="w-4 h-4 text-slate-400 shrink-0" />
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search patient, test, doctor..."
+            className="w-full text-xs font-medium text-slate-800 placeholder:text-slate-400 focus:outline-none"
+          />
+          {search && (
+            <button onClick={() => setSearch('')} className="text-xs font-bold text-slate-400 hover:text-slate-600">
+              ✕
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* TAB 1: PENDING LABORATORY SESSIONS */}
+      {activeTab === 'pending' && (
         <div className="bg-white rounded-2xl border border-slate-100 shadow-xs overflow-hidden">
           {loading ? (
             <div className="flex items-center justify-center h-48">
-              <div className="w-8 h-8 border-4 border-purple-600 border-t-transparent rounded-full animate-spin"></div>
+              <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
             </div>
-          ) : requests.length === 0 ? (
-            <div className="text-center py-16 text-slate-400 text-xs">No pending lab requests.</div>
+          ) : filteredPending.length === 0 ? (
+            <div className="text-center py-16 space-y-2">
+              <div className="w-12 h-12 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center mx-auto">
+                <CheckCircle className="w-6 h-6" />
+              </div>
+              <p className="text-sm font-bold text-slate-700">No pending laboratory sessions</p>
+              <p className="text-xs text-slate-400 max-w-sm mx-auto">
+                When a doctor requests a lab test, it will appear here immediately for the cashier to manage.
+              </p>
+            </div>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-xs text-left">
                 <thead>
-                  <tr className="bg-slate-50 border-b border-slate-100 text-slate-500 font-bold uppercase">
-                    <th className="py-3 px-6">Request #</th>
-                    <th className="py-3 px-4">Patient</th>
-                    <th className="py-3 px-4">Test Requested</th>
-                    <th className="py-3 px-4">Doctor</th>
-                    <th className="py-3 px-4">Payment</th>
-                    <th className="py-3 px-4">Status</th>
-                    <th className="py-3 px-6 text-right">Action</th>
+                  <tr className="bg-slate-50/80 border-b border-slate-100 text-slate-500 font-bold uppercase tracking-wider">
+                    <th className="py-3.5 px-5">Session #</th>
+                    <th className="py-3.5 px-4">Patient Name & ID</th>
+                    <th className="py-3.5 px-4">Requested Test(s)</th>
+                    <th className="py-3.5 px-4">Requested By</th>
+                    <th className="py-3.5 px-4">Date / Time</th>
+                    <th className="py-3.5 px-4">Clinical Reason</th>
+                    <th className="py-3.5 px-4">Status</th>
+                    <th className="py-3.5 px-5 text-right">Cashier Action</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 font-medium">
-                  {requests.map(r => (
-                    <tr key={r._id} className="hover:bg-slate-50/80 transition">
-                      <td className="py-4 px-6 font-mono font-bold text-purple-700">{r.request_number}</td>
-                      <td className="py-4 px-4">
-                        <span className="font-bold text-slate-900 block">{r.patient_id?.name}</span>
-                        <span className="text-[11px] text-slate-400">{r.patient_id?.telephone}</span>
-                      </td>
-                      <td className="py-4 px-4 font-bold text-slate-800">
-                        {r.test_name}
-                        <span className="block text-[11px] text-slate-400 font-normal">{r.reason}</span>
-                      </td>
-                      <td className="py-4 px-4 text-slate-700">{r.doctor_id?.full_name}</td>
-                      <td className="py-4 px-4">
-                        <StatusBadge status={r.payment_status} />
-                      </td>
-                      <td className="py-4 px-4">
-                        <StatusBadge status={r.status} />
-                      </td>
-                      <td className="py-4 px-6 text-right">
-                        {r.status !== 'Completed' ? (
-                          <button
-                            onClick={() => handleOpenEnterResult(r)}
-                            className="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-lg transition text-[11px] shadow-2xs"
-                          >
-                            Enter Result
-                          </button>
-                        ) : (
-                          <span className="text-emerald-600 font-bold text-xs">✓ Done</span>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
+                  {filteredPending.map((req) => {
+                    const testCount = (req.tests && req.tests.length > 0) ? req.tests.length : 1;
+                    return (
+                      <tr key={req._id} className="hover:bg-slate-50/80 transition">
+                        <td className="py-4 px-5 font-mono font-bold text-blue-600">
+                          {req.request_number}
+                        </td>
+                        <td className="py-4 px-4">
+                          <span className="font-bold text-slate-900 block text-xs">{req.patient_id?.name}</span>
+                          <span className="text-[11px] text-slate-400 font-mono">
+                            {req.patient_id?.patient_number || req.patient_id?.telephone}
+                          </span>
+                        </td>
+                        <td className="py-4 px-4">
+                          <div className="space-y-1.5 max-w-xs">
+                            <span className="inline-block px-2 py-0.5 rounded-full text-[10px] font-black bg-purple-100 text-purple-800 border border-purple-200">
+                              {testCount} {testCount === 1 ? 'Test' : 'Tests'}
+                            </span>
+                            <div className="flex flex-wrap gap-1">
+                              {(req.tests && req.tests.length > 0) ? (
+                                req.tests.map((t, idx) => (
+                                  <span key={idx} className="inline-block px-2 py-0.5 rounded-md text-[11px] font-bold bg-slate-100 text-slate-800 border border-slate-200">
+                                    {t.test_name}
+                                  </span>
+                                ))
+                              ) : (
+                                <span className="font-bold text-slate-900 text-xs">{req.test_name}</span>
+                              )}
+                            </div>
+                          </div>
+                        </td>
+                        <td className="py-4 px-4 text-slate-700 font-medium">
+                          Dr. {req.doctor_id?.full_name || req.doctor_id?.username}
+                        </td>
+                        <td className="py-4 px-4 text-slate-500 text-[11px]">
+                          {new Date(req.request_date || req.createdAt).toLocaleString([], {
+                            month: 'short',
+                            day: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit'
+                          })}
+                        </td>
+                        <td className="py-4 px-4 text-slate-500 max-w-xs truncate">
+                          {req.reason || 'Pre-treatment screening'}
+                        </td>
+                        <td className="py-4 px-4">
+                          <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200">
+                            Pending
+                          </span>
+                        </td>
+                        <td className="py-4 px-5 text-right">
+                          <div className="flex items-center justify-end gap-1.5">
+                            <button
+                              onClick={() => handleOpenSessionModal(req)}
+                              className="px-3.5 py-2 bg-purple-600 hover:bg-purple-700 active:scale-95 text-white font-bold rounded-xl text-xs shadow-sm transition cursor-pointer flex items-center gap-1.5"
+                            >
+                              <DollarSign className="w-3.5 h-3.5" />
+                              <span>Enter Cost & Result</span>
+                            </button>
+
+                            <button
+                              onClick={() => handleDeleteRequest(req._id)}
+                              title="Cancel Request"
+                              className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition cursor-pointer"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -362,52 +572,108 @@ const LabManager = () => {
         </div>
       )}
 
-      {/* Tab 2: Results Archive */}
-      {activeTab === 'results' && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {results.map(res => (
-            <div key={res._id} className="bg-white p-5 rounded-2xl border border-slate-100 shadow-xs space-y-3">
-              <div className="flex justify-between items-center">
-                <div>
-                  <h3 className="font-bold text-slate-900 text-sm">{res.test_name}</h3>
-                  <p className="text-xs text-slate-500">Patient: <span className="font-bold text-slate-800">{res.patient_id?.name}</span></p>
-                </div>
-                <StatusBadge status={res.verification_status} />
-              </div>
-
-              <div className="p-3 bg-slate-50 rounded-xl border border-slate-100 space-y-1.5 text-xs">
-                <div className="flex justify-between">
-                  <span className="text-slate-500">Result:</span>
-                  <span className="font-mono font-bold text-blue-700 text-sm">{res.result}</span>
-                </div>
-                {res.reference_range && (
-                  <div className="flex justify-between text-slate-500">
-                    <span>Reference Range:</span>
-                    <span>{res.reference_range}</span>
-                  </div>
-                )}
-                <div className="flex justify-between text-slate-500">
-                  <span>Interpretation:</span>
-                  <span className="font-bold text-slate-800">{res.clinical_interpretation}</span>
-                </div>
-              </div>
-
-              <div className="flex justify-between items-center text-[11px] text-slate-400 pt-1">
-                <span>Doctor: Dr. {res.doctor_id?.full_name}</span>
-                <span>{new Date(res.result_date).toLocaleString()}</span>
-              </div>
+      {/* TAB 2: COMPLETED RESULTS ARCHIVE */}
+      {activeTab === 'completed' && (
+        <div className="bg-white rounded-2xl border border-slate-100 shadow-xs overflow-hidden">
+          {filteredCompleted.length === 0 ? (
+            <div className="text-center py-16 text-slate-400 text-xs">
+              No completed laboratory records match your search.
             </div>
-          ))}
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs text-left">
+                <thead>
+                  <tr className="bg-slate-50/80 border-b border-slate-100 text-slate-500 font-bold uppercase tracking-wider">
+                    <th className="py-3.5 px-5">Session #</th>
+                    <th className="py-3.5 px-4">Patient</th>
+                    <th className="py-3.5 px-4">Laboratory Tests & Outcomes</th>
+                    <th className="py-3.5 px-4 text-right">Total Cost</th>
+                    <th className="py-3.5 px-4">Entered By</th>
+                    <th className="py-3.5 px-4">Doctor</th>
+                    <th className="py-3.5 px-4">Date Completed</th>
+                    <th className="py-3.5 px-5 text-right">Status</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 font-medium">
+                  {filteredCompleted.map((r) => {
+                    const totalCost = Number(r.total_cost || r.cost || r.price || 0);
+
+                    return (
+                      <tr key={r._id} className="hover:bg-slate-50/80 transition">
+                        <td className="py-4 px-5 font-mono font-bold text-slate-600">{r.request_number}</td>
+                        <td className="py-4 px-4">
+                          <span className="font-bold text-slate-900 block">{r.patient_id?.name}</span>
+                          <span className="text-[11px] text-slate-400 font-mono">
+                            {r.patient_id?.patient_number || r.patient_id?.telephone}
+                          </span>
+                        </td>
+                        <td className="py-4 px-4">
+                          <div className="space-y-1.5 max-w-md">
+                            {(r.tests && r.tests.length > 0) ? (
+                              r.tests.map((t, idx) => {
+                                const isPos = t.result?.toLowerCase().includes('positive') || t.result?.toLowerCase().includes('reactive');
+                                const isNeg = t.result?.toLowerCase().includes('negative') || t.result?.toLowerCase().includes('non-reactive');
+
+                                return (
+                                  <div key={idx} className="flex items-center justify-between gap-2 p-1.5 bg-slate-50 rounded-lg border border-slate-100">
+                                    <span className="font-bold text-slate-800 text-[11px]">{t.test_name}</span>
+                                    <div className="flex items-center gap-2">
+                                      <span className="font-mono text-slate-500 text-[10px] font-bold">${Number(t.cost || 0).toFixed(2)}</span>
+                                      <span className={`px-2 py-0.5 rounded text-[10px] font-black ${
+                                        isPos ? 'bg-rose-100 text-rose-800' :
+                                        isNeg ? 'bg-emerald-100 text-emerald-800' :
+                                        'bg-blue-100 text-blue-800'
+                                      }`}>
+                                        {t.result || 'Completed'}
+                                      </span>
+                                    </div>
+                                  </div>
+                                );
+                              })
+                            ) : (
+                              <div>
+                                <span className="font-bold text-slate-800 block">{r.test_name}</span>
+                                <span className="text-[11px] text-blue-700 font-bold">{r.result}</span>
+                              </div>
+                            )}
+                          </div>
+                        </td>
+                        <td className="py-4 px-4 text-right font-mono font-black text-slate-900 text-sm">
+                          ${totalCost.toFixed(2)}
+                        </td>
+                        <td className="py-4 px-4 text-slate-700">{r.performed_by || 'Cashier'}</td>
+                        <td className="py-4 px-4 text-slate-700">Dr. {r.doctor_id?.full_name || r.doctor_id?.username}</td>
+                        <td className="py-4 px-4 text-slate-500 text-[11px]">
+                          {new Date(r.completed_date || r.updatedAt).toLocaleDateString([], {
+                            day: 'numeric',
+                            month: 'short',
+                            year: 'numeric'
+                          })}
+                        </td>
+                        <td className="py-4 px-5 text-right">
+                          <span className="text-emerald-700 bg-emerald-50 border border-emerald-200 font-bold px-2.5 py-1 rounded-full text-[10px]">
+                            ✓ Sent to Doctor
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       )}
 
-      {/* Tab 3: Test Catalog */}
+      {/* TAB 3: TESTS CATALOG */}
       {activeTab === 'catalog' && (
         <div className="space-y-4">
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
             <div>
-              <h3 className="text-base font-bold text-slate-900">Diagnostic Tests & Disease Panels</h3>
-              <p className="text-xs text-slate-500">Configure prices, disease categories, and reference ranges</p>
+              <h3 className="text-base font-bold text-slate-900">Diagnostic Tests Catalog</h3>
+              <p className="text-xs text-slate-500">
+                Tests available for doctors to request. The cashier manually enters the actual price per session.
+              </p>
             </div>
             {isAdmin && (
               <button
@@ -415,7 +681,7 @@ const LabManager = () => {
                 className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 active:scale-95 text-white text-xs font-bold rounded-xl shadow-sm transition cursor-pointer"
               >
                 <Plus className="w-3.5 h-3.5" />
-                Add Lab Test / Disease
+                Add Lab Test
               </button>
             )}
           </div>
@@ -427,22 +693,18 @@ const LabManager = () => {
                   <tr className="bg-slate-50 border-b border-slate-100 text-slate-500 font-bold uppercase tracking-wider">
                     <th className="py-3 px-5">Code</th>
                     <th className="py-3 px-4">Test / Disease Name</th>
-                    <th className="py-3 px-4">Disease Category</th>
+                    <th className="py-3 px-4">Category</th>
                     <th className="py-3 px-4">Sample Type</th>
                     <th className="py-3 px-4">Reference Range</th>
-                    <th className="py-3 px-4 text-right">Fee ($)</th>
                     <th className="py-3 px-4 text-center">Status</th>
                     {isAdmin && <th className="py-3 px-5 text-right">Actions</th>}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 font-medium">
-                  {tests.map(t => (
+                  {tests.map((t) => (
                     <tr key={t._id} className="hover:bg-slate-50/80 transition">
                       <td className="py-3.5 px-5 font-mono font-bold text-purple-700">{t.test_code}</td>
-                      <td className="py-3.5 px-4">
-                        <span className="font-bold text-slate-900 block">{t.test_name}</span>
-                        {t.description && <span className="text-[10px] text-slate-400 block truncate max-w-xs">{t.description}</span>}
-                      </td>
+                      <td className="py-3.5 px-4 font-bold text-slate-900">{t.test_name}</td>
                       <td className="py-3.5 px-4">
                         <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-purple-50 text-purple-700 border border-purple-100">
                           {t.category}
@@ -450,13 +712,14 @@ const LabManager = () => {
                       </td>
                       <td className="py-3.5 px-4 text-slate-600">{t.sample_type || 'Blood'}</td>
                       <td className="py-3.5 px-4 font-mono text-slate-600">{t.reference_range || 'N/A'}</td>
-                      <td className="py-3.5 px-4 text-right font-mono font-bold text-sm text-slate-900">
-                        ${Number(t.price).toFixed(2)}
-                      </td>
                       <td className="py-3.5 px-4 text-center">
-                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                          t.status === 'Active' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-slate-100 text-slate-500'
-                        }`}>
+                        <span
+                          className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                            t.status === 'Active'
+                              ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                              : 'bg-slate-100 text-slate-500'
+                          }`}
+                        >
                           {t.status || 'Active'}
                         </span>
                       </td>
@@ -482,7 +745,7 @@ const LabManager = () => {
                             <div className="flex items-center justify-end gap-1.5">
                               <button
                                 onClick={() => handleOpenEditTest(t)}
-                                title="Edit Test & Pricing"
+                                title="Edit Test"
                                 className="p-1.5 bg-amber-50 hover:bg-amber-500 hover:text-white text-amber-600 rounded-lg transition cursor-pointer"
                               >
                                 <Edit2 className="w-3.5 h-3.5" />
@@ -503,83 +766,200 @@ const LabManager = () => {
                 </tbody>
               </table>
             </div>
-
-            {tests.length === 0 && (
-              <div className="text-center py-12 space-y-2">
-                <TestTube2 className="w-8 h-8 text-slate-300 mx-auto" />
-                <p className="text-sm font-bold text-slate-700">No laboratory tests found</p>
-                <p className="text-xs text-slate-400">Click Add Lab Test to configure diagnostic tests and prices.</p>
-              </div>
-            )}
           </div>
         </div>
       )}
 
-      {/* Enter Result Modal */}
+      {/* MODAL 1: CASHIER PROCESSES WHOLE LABORATORY REQUEST */}
       <Modal
-        isOpen={isResultModalOpen}
-        onClose={() => setIsResultModalOpen(false)}
-        icon={TestTube2}
-        title={`Enter Lab Result: ${selectedRequest?.test_name}`}
-        subtitle="Record quantitative / qualitative clinical laboratory test outcome."
-        maxWidth="max-w-lg"
+        isOpen={isSessionModalOpen}
+        onClose={() => {
+          setIsSessionModalOpen(false);
+          setSelectedRequest(null);
+        }}
+        icon={DollarSign}
+        title={`Process Laboratory Request: ${selectedRequest?.request_number || ''}`}
+        subtitle="Enter individual test costs, enter test results, and send the complete package back to the doctor."
+        maxWidth="max-w-2xl"
       >
-        <form onSubmit={submitResult} className="space-y-3.5 text-xs">
-          <div>
-            <label className="block text-[11px] font-bold text-slate-700 mb-1">Quantitative / Qualitative Result *</label>
-            <input
-              type="text"
-              required
-              value={resultForm.result}
-              onChange={(e) => setResultForm({ ...resultForm, result: e.target.value })}
-              placeholder="e.g. 13.5 g/dL, Non-Reactive, Negative, 98 mg/dL"
-              className="w-full px-3.5 py-2 rounded-xl border border-slate-200 text-xs font-mono font-bold text-blue-700 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white transition"
-            />
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
-              <label className="block text-[11px] font-bold text-slate-700 mb-1">Reference Range</label>
-              <input
-                type="text"
-                value={resultForm.reference_range}
-                onChange={(e) => setResultForm({ ...resultForm, reference_range: e.target.value })}
-                placeholder="e.g. 12.0 - 15.5 g/dL"
-                className="w-full px-3.5 py-2 rounded-xl border border-slate-200 text-xs text-slate-800 placeholder:text-slate-400 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white transition"
-              />
-            </div>
-
-            <div>
-              <label className="block text-[11px] font-bold text-slate-700 mb-1">Clinical Interpretation</label>
-              <select
-                value={resultForm.clinical_interpretation}
-                onChange={(e) => setResultForm({ ...resultForm, clinical_interpretation: e.target.value })}
-                className="w-full px-3.5 py-2 rounded-xl border border-slate-200 text-xs text-slate-800 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white transition cursor-pointer font-bold"
-              >
-                <option value="Normal">Normal</option>
-                <option value="Non-Reactive / Negative">Non-Reactive / Negative</option>
-                <option value="Reactive / Positive">Reactive / Positive</option>
-                <option value="Abnormal">Abnormal</option>
-                <option value="Borderline / Inconclusive">Borderline / Inconclusive</option>
-              </select>
+        <form onSubmit={submitCashierSession} className="space-y-4 text-xs">
+          {/* Patient & Doctor Context Banner */}
+          <div className="p-3.5 bg-purple-50/70 border border-purple-200/80 rounded-2xl space-y-2">
+            <div className="flex justify-between items-center">
+              <div>
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Patient</span>
+                <p className="text-sm font-black text-slate-900">{selectedRequest?.patient_id?.name}</p>
+                <p className="text-[11px] text-slate-500 font-mono">
+                  {selectedRequest?.patient_id?.patient_number} • {selectedRequest?.patient_id?.telephone}
+                </p>
+              </div>
+              <div className="text-right">
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Requested By</span>
+                <p className="text-xs font-bold text-slate-800">Dr. {selectedRequest?.doctor_id?.full_name || selectedRequest?.doctor_id?.username}</p>
+                <p className="text-[10px] text-purple-700 font-bold mt-0.5">
+                  Reason: {selectedRequest?.reason || 'Pre-treatment screening'}
+                </p>
+              </div>
             </div>
           </div>
 
+          {/* Table of Individual Tests (with Cost & Result per Test) */}
           <div>
-            <label className="block text-[11px] font-bold text-slate-700 mb-1">Laboratory Staff Name</label>
+            <div className="flex justify-between items-center mb-2">
+              <label className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                <TestTube2 className="w-4 h-4 text-purple-600" />
+                <span>Requested Tests ({sessionTests.length}) — Individual Costs & Results</span>
+              </label>
+              <span className="text-[11px] text-slate-400">Enter cost & result for each test</span>
+            </div>
+
+            <div className="space-y-2.5 max-h-72 overflow-y-auto pr-1">
+              {sessionTests.map((t, idx) => (
+                <div key={idx} className="p-3 bg-white border border-slate-200 rounded-2xl shadow-2xs space-y-2.5 hover:border-purple-300 transition">
+                  <div className="flex justify-between items-center">
+                    <div className="flex items-center gap-2">
+                      <span className="w-5 h-5 rounded-full bg-purple-100 text-purple-800 font-bold text-[10px] flex items-center justify-center">
+                        {idx + 1}
+                      </span>
+                      <span className="font-bold text-slate-900 text-xs">{t.test_name}</span>
+                    </div>
+                    <span className="text-[10px] font-semibold bg-slate-100 text-slate-600 px-2 py-0.5 rounded-md">
+                      {t.category || 'General'}
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-12 gap-2.5 items-center">
+                    {/* Cost Input (4 cols) */}
+                    <div className="sm:col-span-4">
+                      <label className="block text-[10px] font-bold text-slate-600 mb-0.5">Cost ($)</label>
+                      <div className="relative">
+                        <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 font-bold">$</span>
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          placeholder="0.00"
+                          value={t.cost}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setSessionTests(prev => prev.map((item, i) => i === idx ? { ...item, cost: val } : item));
+                          }}
+                          className="w-full pl-6 pr-2.5 py-1.5 rounded-xl border border-slate-200 text-xs font-bold text-slate-900 focus:outline-none focus:border-purple-500 bg-slate-50/50"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Result Input (8 cols) */}
+                    <div className="sm:col-span-8">
+                      <label className="block text-[10px] font-bold text-slate-600 mb-0.5">Result</label>
+                      <input
+                        type="text"
+                        placeholder="e.g. Normal, Negative, 98 mg/dL, O+"
+                        value={t.result}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setSessionTests(prev => prev.map((item, i) => i === idx ? { ...item, result: val } : item));
+                        }}
+                        className="w-full px-3 py-1.5 rounded-xl border border-slate-200 text-xs font-bold text-blue-900 placeholder:text-slate-400 focus:outline-none focus:border-purple-500 bg-white"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Quick Result Chips for this Test */}
+                  <div className="flex flex-wrap items-center gap-1 pt-0.5">
+                    <span className="text-[9px] text-slate-400 font-bold uppercase mr-1">Quick:</span>
+                    {COMMON_RESULTS.map((res) => (
+                      <button
+                        key={res}
+                        type="button"
+                        onClick={() => {
+                          setSessionTests(prev => prev.map((item, i) => i === idx ? { ...item, result: res } : item));
+                        }}
+                        className={`px-2 py-0.5 rounded-md text-[10px] font-bold transition cursor-pointer border ${
+                          t.result === res
+                            ? 'bg-purple-600 text-white border-purple-600'
+                            : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
+                        }`}
+                      >
+                        {res}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Live Calculated Total Cost Bar */}
+            <div className="mt-3 p-3 bg-slate-900 text-white rounded-2xl flex justify-between items-center shadow-sm">
+              <div>
+                <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Total Laboratory Cost</span>
+                <p className="text-[11px] text-slate-300">Sum of all {sessionTests.length} tests in this request</p>
+              </div>
+              <div className="text-right">
+                <span className="font-mono text-lg font-black text-emerald-400">
+                  ${sessionTests.reduce((acc, t) => acc + (parseFloat(t.cost) || 0), 0).toFixed(2)}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* General Notes */}
+          <div>
+            <label className="block text-[11px] font-bold text-slate-700 mb-1">
+              Laboratory Notes / Clinical Remarks (Optional)
+            </label>
             <input
               type="text"
-              value={resultForm.performed_by}
-              onChange={(e) => setResultForm({ ...resultForm, performed_by: e.target.value })}
-              placeholder="e.g. Lab Tech Hassan"
-              className="w-full px-3.5 py-2 rounded-xl border border-slate-200 text-xs text-slate-800 placeholder:text-slate-400 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white transition"
+              value={sessionForm.notes}
+              onChange={(e) => setSessionForm({ ...sessionForm, notes: e.target.value })}
+              placeholder="e.g. Tests performed on fresh serum, verified by cashier/lab technician"
+              className="w-full px-3.5 py-2 rounded-xl border border-slate-200 text-xs text-slate-800 placeholder:text-slate-400 focus:outline-none focus:border-purple-500 bg-white transition"
             />
           </div>
 
-          <div className="flex justify-end gap-2.5 pt-2">
+          {/* Cashier Payment Processing */}
+          <div className="p-3 bg-purple-50/60 border border-purple-200/70 rounded-2xl space-y-2">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs font-bold text-purple-950">Approve & Record Payment at Cashier</p>
+                <p className="text-[10px] text-purple-700">One single payment transaction for the entire request</p>
+              </div>
+              <label className="relative inline-flex items-center cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={sessionForm.mark_paid}
+                  onChange={(e) => setSessionForm({ ...sessionForm, mark_paid: e.target.checked })}
+                  className="sr-only peer"
+                />
+                <div className="w-9 h-5 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-purple-600"></div>
+              </label>
+            </div>
+
+            {sessionForm.mark_paid && (
+              <div className="pt-2 border-t border-purple-200/50 flex items-center gap-2">
+                <span className="text-[11px] font-bold text-purple-900">Payment Method:</span>
+                <select
+                  value={sessionForm.payment_method}
+                  onChange={(e) => setSessionForm({ ...sessionForm, payment_method: e.target.value })}
+                  className="px-2.5 py-1 bg-white border border-purple-200 rounded-lg text-xs font-bold text-purple-950 focus:outline-none cursor-pointer"
+                >
+                  <option value="Cash">💵 Cash</option>
+                  <option value="Mobile Payment">📱 Mobile Payment (EVC Plus / Zaad)</option>
+                  <option value="Card">💳 Credit / Debit Card</option>
+                  <option value="Bank Transfer">🏦 Bank Transfer</option>
+                </select>
+              </div>
+            )}
+          </div>
+
+          {/* Action Buttons */}
+          <div className="flex justify-end gap-2.5 pt-2 border-t border-slate-100">
             <button
               type="button"
-              onClick={() => setIsResultModalOpen(false)}
+              onClick={() => {
+                setIsSessionModalOpen(false);
+                setSelectedRequest(null);
+              }}
               className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs transition cursor-pointer"
             >
               Cancel
@@ -587,15 +967,114 @@ const LabManager = () => {
             <button
               type="submit"
               disabled={submitting}
-              className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 active:scale-[0.99] text-white font-bold text-xs rounded-xl shadow-sm transition cursor-pointer disabled:opacity-50"
+              className="px-6 py-2.5 bg-purple-600 hover:bg-purple-700 active:scale-[0.99] text-white font-bold text-xs rounded-xl shadow-md transition cursor-pointer flex items-center gap-2 disabled:opacity-50"
             >
-              {submitting ? 'Saving...' : 'Verify & Send to Doctor'}
+              <Send className="w-3.5 h-3.5" />
+              <span>{submitting ? 'Submitting...' : 'Submit All Results & Send to Doctor'}</span>
             </button>
           </div>
         </form>
       </Modal>
 
-      {/* Add / Edit Test Modal */}
+      {/* MODAL 2: DOCTOR REQUESTS LAB TEST */}
+      <Modal
+        isOpen={isRequestModalOpen}
+        onClose={() => setIsRequestModalOpen(false)}
+        icon={Stethoscope}
+        title="Send Patient to Laboratory"
+        subtitle="Select required tests and clinical reason. Test cost will be handled by the cashier."
+        maxWidth="max-w-xl"
+      >
+        <form onSubmit={submitDoctorLabRequest} className="space-y-3.5 text-xs">
+          {/* Select Active Patient Visit */}
+          <div>
+            <SearchableSelect
+              label="Select Patient & Active Visit"
+              required
+              icon={Users}
+              placeholder="-- Search & Select Patient / Active Visit --"
+              searchPlaceholder="Search by patient name, telephone, or visit number..."
+              value={requestVisitId}
+              onChange={(val) => setRequestVisitId(val)}
+              options={activeVisits.map((v) => ({
+                value: v._id,
+                label: v.patient_id?.name || 'Patient',
+                sublabel: `${v.patient_id?.patient_number || ''} • ${v.patient_id?.telephone || ''}`,
+                badge: `Visit ${v.visit_number}`
+              }))}
+            />
+          </div>
+
+          {/* Test Checkbox List (No forced prices shown) */}
+          <div>
+            <label className="block text-[11px] font-bold text-slate-700 mb-1.5">
+              Select Required Lab Test(s) ({requestSelectedTestIds.length} selected) *
+            </label>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-56 overflow-y-auto p-2.5 bg-slate-50 rounded-2xl border border-slate-200">
+              {tests.map((test) => {
+                const isChecked = requestSelectedTestIds.includes(test._id);
+                return (
+                  <div
+                    key={test._id}
+                    onClick={() => handleToggleTestInRequest(test._id)}
+                    className={`p-2.5 rounded-xl border flex items-center justify-between gap-2 cursor-pointer transition ${
+                      isChecked
+                        ? 'bg-blue-50/80 border-blue-500 text-blue-900 shadow-2xs font-bold'
+                        : 'bg-white border-slate-200 text-slate-700 hover:border-slate-300'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2">
+                      <div
+                        className={`w-4 h-4 rounded-md flex items-center justify-center border ${
+                          isChecked ? 'bg-blue-600 border-blue-600 text-white' : 'border-slate-300 bg-white'
+                        }`}
+                      >
+                        {isChecked && <CheckCircle className="w-3.5 h-3.5" />}
+                      </div>
+                      <span className="text-xs">{test.test_name}</span>
+                    </div>
+                    <span className="text-[10px] text-slate-400 font-normal">{test.category}</span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Clinical Reason */}
+          <div>
+            <label className="block text-[11px] font-bold text-slate-700 mb-1">
+              Clinical Reason / Indication
+            </label>
+            <input
+              type="text"
+              value={requestReason}
+              onChange={(e) => setRequestReason(e.target.value)}
+              placeholder="e.g. Pre-treatment screening, extraction preparation"
+              className="w-full px-3.5 py-2 rounded-xl border border-slate-200 text-xs text-slate-800 placeholder:text-slate-400 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white transition"
+            />
+          </div>
+
+          <div className="flex justify-end gap-2.5 pt-2 border-t border-slate-100">
+            <button
+              type="button"
+              onClick={() => setIsRequestModalOpen(false)}
+              className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs transition cursor-pointer"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={submitting || requestSelectedTestIds.length === 0}
+              className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 active:scale-[0.99] text-white font-bold text-xs rounded-xl shadow-md transition cursor-pointer disabled:opacity-50 flex items-center gap-1.5"
+            >
+              <Send className="w-3.5 h-3.5" />
+              <span>{submitting ? 'Sending...' : 'Send to Laboratory'}</span>
+            </button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* MODAL 3: ADD / EDIT TEST IN CATALOG */}
       <Modal
         isOpen={isTestModalOpen}
         onClose={() => {
@@ -603,11 +1082,11 @@ const LabManager = () => {
           setEditingTest(null);
         }}
         icon={TestTube2}
-        title={editingTest ? `Edit Lab Test: ${editingTest.test_name}` : 'Add New Diagnostic Lab Test'}
-        subtitle={editingTest ? 'Update test/disease parameters, disease panel, and custom price.' : 'Configure test/disease name, category, price, and reference range.'}
+        title={editingTest ? `Edit Test: ${editingTest.test_name}` : 'Add Test to Catalog'}
+        subtitle="Configure diagnostic test names and disease panels for doctors to request."
         maxWidth="max-w-xl"
       >
-        <form onSubmit={submitTest} className="space-y-3.5 text-xs">
+        <form onSubmit={submitTestCatalog} className="space-y-3.5 text-xs">
           <div>
             <label className="block text-[11px] font-bold text-slate-700 mb-1">
               Test / Disease Name *
@@ -617,99 +1096,50 @@ const LabManager = () => {
               required
               value={testForm.test_name}
               onChange={(e) => setTestForm({ ...testForm, test_name: e.target.value })}
-              placeholder="e.g. Hepatitis B Surface Antigen (HBsAg), HIV Screening, Blood Glucose"
+              placeholder="e.g. Blood Glucose, Hemoglobin (Hb), Blood Group"
               className="w-full px-3.5 py-2 rounded-xl border border-slate-200 text-xs font-bold text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white transition"
             />
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {/* Disease Category with User Input & Suggestions */}
             <div>
               <label className="block text-[11px] font-bold text-slate-700 mb-1">
-                Disease Category / Panel *
+                Disease Category *
               </label>
               <input
                 type="text"
                 required
-                list="lab-category-suggestions"
                 value={testForm.category}
                 onChange={(e) => setTestForm({ ...testForm, category: e.target.value })}
-                placeholder="e.g. Infectious Disease, Blood, Biochemistry..."
+                placeholder="e.g. Blood, Infectious Disease, Biochemistry..."
                 className="w-full px-3.5 py-2 rounded-xl border border-slate-200 text-xs font-bold text-purple-900 placeholder:text-slate-400 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white transition"
               />
-              <datalist id="lab-category-suggestions">
-                <option value="Infectious Disease Screening" />
-                <option value="Blood & Hematology" />
-                <option value="Biochemistry" />
-                <option value="Pregnancy" />
-                <option value="Viral Hepatitis Panel" />
-                <option value="STD Screening" />
-                <option value="Coagulation Profile" />
-                <option value="Microbiology & Culture" />
-                <option value="Clinical Vital / Other" />
-              </datalist>
-
-              {/* Quick suggestion pills */}
-              <div className="flex flex-wrap gap-1 mt-1.5">
-                {['Infectious Disease', 'Blood', 'Biochemistry', 'Pregnancy'].map((sug) => (
-                  <button
-                    key={sug}
-                    type="button"
-                    onClick={() => setTestForm({ ...testForm, category: sug })}
-                    className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-100 hover:bg-purple-100 hover:text-purple-800 text-slate-600 transition cursor-pointer"
-                  >
-                    + {sug}
-                  </button>
-                ))}
-              </div>
             </div>
 
-            {/* Editable Price Input (Removes any fixed value) */}
-            <div>
-              <label className="block text-[11px] font-bold text-slate-700 mb-1">
-                Price ($) *
-              </label>
-              <input
-                type="number"
-                required
-                min="0"
-                step="0.01"
-                value={testForm.price}
-                onChange={(e) => setTestForm({ ...testForm, price: e.target.value })}
-                placeholder="e.g. 15.00 (Enter any amount)"
-                className="w-full px-3.5 py-2 rounded-xl border border-slate-200 text-xs text-slate-900 font-mono font-bold focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white transition"
-              />
-              <p className="text-[10px] text-slate-400 mt-1">
-                Set custom fee. Price is completely editable.
-              </p>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block text-[11px] font-bold text-slate-700 mb-1">Sample Type</label>
               <input
                 type="text"
                 value={testForm.sample_type}
                 onChange={(e) => setTestForm({ ...testForm, sample_type: e.target.value })}
-                placeholder="e.g. Whole Blood, Serum, Plasma, Saliva, Urine"
-                className="w-full px-3.5 py-2 rounded-xl border border-slate-200 text-xs text-slate-800 placeholder:text-slate-400 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white transition"
-              />
-            </div>
-
-            <div>
-              <label className="block text-[11px] font-bold text-slate-700 mb-1">Reference / Normal Range</label>
-              <input
-                type="text"
-                value={testForm.reference_range}
-                onChange={(e) => setTestForm({ ...testForm, reference_range: e.target.value })}
-                placeholder="e.g. Non-Reactive, Negative, 70 - 100 mg/dL"
+                placeholder="e.g. Whole Blood, Serum, Urine"
                 className="w-full px-3.5 py-2 rounded-xl border border-slate-200 text-xs text-slate-800 placeholder:text-slate-400 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white transition"
               />
             </div>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="block text-[11px] font-bold text-slate-700 mb-1">Reference Range</label>
+              <input
+                type="text"
+                value={testForm.reference_range}
+                onChange={(e) => setTestForm({ ...testForm, reference_range: e.target.value })}
+                placeholder="e.g. Negative, 70-100 mg/dL"
+                className="w-full px-3.5 py-2 rounded-xl border border-slate-200 text-xs text-slate-800 placeholder:text-slate-400 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white transition"
+              />
+            </div>
+
             <div>
               <label className="block text-[11px] font-bold text-slate-700 mb-1">Status</label>
               <select
@@ -717,24 +1147,13 @@ const LabManager = () => {
                 onChange={(e) => setTestForm({ ...testForm, status: e.target.value })}
                 className="w-full px-3.5 py-2 rounded-xl border border-slate-200 text-xs font-bold text-slate-800 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white transition cursor-pointer"
               >
-                <option value="Active">Active (Available for Orders)</option>
-                <option value="Inactive">Inactive (Hidden)</option>
+                <option value="Active">Active</option>
+                <option value="Inactive">Inactive</option>
               </select>
-            </div>
-
-            <div>
-              <label className="block text-[11px] font-bold text-slate-700 mb-1">Description / Notes</label>
-              <input
-                type="text"
-                value={testForm.description}
-                onChange={(e) => setTestForm({ ...testForm, description: e.target.value })}
-                placeholder="e.g. Routine dental pre-procedure screening"
-                className="w-full px-3.5 py-2 rounded-xl border border-slate-200 text-xs text-slate-800 placeholder:text-slate-400 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white transition"
-              />
             </div>
           </div>
 
-          <div className="flex justify-end gap-2.5 pt-2">
+          <div className="flex justify-end gap-2.5 pt-2 border-t border-slate-100">
             <button
               type="button"
               onClick={() => {
@@ -750,142 +1169,8 @@ const LabManager = () => {
               disabled={submitting}
               className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 active:scale-[0.99] text-white font-bold text-xs rounded-xl shadow-sm transition cursor-pointer disabled:opacity-50"
             >
-              {submitting ? 'Saving...' : editingTest ? 'Update Lab Test' : 'Add Lab Test'}
+              {submitting ? 'Saving...' : editingTest ? 'Update Test' : 'Add Test'}
             </button>
-          </div>
-        </form>
-      </Modal>
-
-      {/* Batch / Multi-Blood Test Request Modal */}
-      <Modal
-        isOpen={isBatchModalOpen}
-        onClose={() => setIsBatchModalOpen(false)}
-        icon={TestTube2}
-        title="Order Multi-Blood / Lab Test Panel"
-        subtitle="Select active patient visit and tests for diagnostic screening."
-        maxWidth="max-w-2xl"
-      >
-        <form onSubmit={submitBatchLabRequest} className="space-y-3.5 text-xs">
-          
-          {/* Patient Visit Selector */}
-          <div>
-            <label className="block text-[11px] font-bold text-slate-700 mb-1">Select Patient Visit *</label>
-            <select
-              required
-              value={batchVisitId}
-              onChange={(e) => setBatchVisitId(e.target.value)}
-              className="w-full px-3.5 py-2 rounded-xl border border-slate-200 text-xs text-slate-900 font-bold focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white transition cursor-pointer"
-            >
-              <option value="">-- Choose Patient / Active Visit --</option>
-              {activeVisits.map(v => (
-                <option key={v._id} value={v._id}>
-                  {v.visit_number} - {v.patient_id?.name} ({v.patient_id?.telephone || 'No phone'}) - [Status: {v.status}]
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* Clinical Reason */}
-          <div>
-            <label className="block text-[11px] font-bold text-slate-700 mb-1">Clinical Indication / Reason</label>
-            <input
-              type="text"
-              value={batchReason}
-              onChange={(e) => setBatchReason(e.target.value)}
-              placeholder="e.g. Pre-extraction coagulation profile, infectious disease screening"
-              className="w-full px-3.5 py-2 rounded-xl border border-slate-200 text-xs text-slate-800 placeholder:text-slate-400 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white transition"
-            />
-          </div>
-
-          {/* Test Selection Grid with Category Quick Selection */}
-          <div>
-            <div className="flex items-center justify-between mb-2">
-              <label className="text-[11px] font-bold text-slate-700">
-                Select Laboratory Tests ({batchSelectedTestIds.length} selected) *
-              </label>
-              <span className="font-mono font-bold text-blue-700 text-xs">
-                Total Fees: ${selectedTestsTotal.toFixed(2)}
-              </span>
-            </div>
-
-            {/* Category Quick Tags */}
-            <div className="flex flex-wrap gap-1.5 mb-2.5">
-              {Array.from(new Set(tests.map(t => t.category).filter(Boolean))).map(cat => {
-                const catTests = tests.filter(t => t.category === cat);
-                if (catTests.length === 0) return null;
-                const isAllSelected = catTests.every(t => batchSelectedTestIds.includes(t._id));
-                return (
-                  <button
-                    key={cat}
-                    type="button"
-                    onClick={() => handleSelectAllCategory(cat)}
-                    className={`px-2.5 py-1 rounded-xl text-[11px] font-bold border transition cursor-pointer ${
-                      isAllSelected
-                        ? 'bg-blue-600 text-white border-blue-600 shadow-2xs'
-                        : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
-                    }`}
-                  >
-                    {isAllSelected ? `✓ ${cat} (All)` : `+ All ${cat}`}
-                  </button>
-                );
-              })}
-            </div>
-
-            {/* Tests Checkbox Grid */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-52 overflow-y-auto p-2 bg-slate-50 rounded-2xl border border-slate-200">
-              {tests.map(test => {
-                const isChecked = batchSelectedTestIds.includes(test._id);
-                return (
-                  <div
-                    key={test._id}
-                    onClick={() => handleToggleTestInBatch(test._id)}
-                    className={`p-2.5 rounded-xl border flex items-center justify-between gap-2 cursor-pointer transition ${
-                      isChecked
-                        ? 'bg-blue-50/80 border-blue-400 text-blue-900 shadow-2xs'
-                        : 'bg-white border-slate-200 text-slate-700 hover:border-blue-200 hover:bg-blue-50/30'
-                    }`}
-                  >
-                    <div className="flex items-center gap-2 min-w-0">
-                      <div className={`w-4 h-4 rounded-md flex items-center justify-center border ${
-                        isChecked ? 'bg-blue-600 border-blue-600 text-white' : 'border-slate-300 bg-white'
-                      }`}>
-                        {isChecked && <CheckCircle className="w-3.5 h-3.5" />}
-                      </div>
-                      <div className="truncate">
-                        <p className="font-bold text-xs truncate">{test.test_name}</p>
-                        <p className="text-[10px] text-slate-400">{test.category} • {test.sample_type}</p>
-                      </div>
-                    </div>
-                    <span className="font-mono font-bold text-xs text-slate-900 shrink-0">
-                      ${test.price.toFixed(2)}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Action Buttons */}
-          <div className="flex justify-between items-center pt-2">
-            <div className="text-xs text-slate-500 font-medium">
-              Selected: <span className="font-bold text-slate-900">{batchSelectedTestIds.length} tests</span>
-            </div>
-            <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={() => setIsBatchModalOpen(false)}
-                className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs transition cursor-pointer"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                disabled={submitting || batchSelectedTestIds.length === 0}
-                className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 active:scale-[0.99] text-white font-bold text-xs rounded-xl shadow-sm transition cursor-pointer disabled:opacity-50"
-              >
-                {submitting ? 'Creating...' : `Order ${batchSelectedTestIds.length} Tests ($${selectedTestsTotal.toFixed(2)})`}
-              </button>
-            </div>
           </div>
         </form>
       </Modal>
@@ -895,4 +1180,3 @@ const LabManager = () => {
 };
 
 export default LabManager;
-

@@ -6,7 +6,13 @@ export const getAppointments = async (req, res, next) => {
     const { doctor_id, patient_id, date, status } = req.query;
     let filter = {};
 
-    if (doctor_id) filter.doctor_id = doctor_id;
+    // Strict Doctor Scoping: Doctors ONLY see their assigned appointments
+    if (req.user?.role === 'Doctor') {
+      filter.doctor_id = req.user._id;
+    } else if (doctor_id) {
+      filter.doctor_id = doctor_id;
+    }
+
     if (patient_id) filter.patient_id = patient_id;
     if (status) filter.status = status;
 
@@ -33,9 +39,11 @@ export const createAppointment = async (req, res, next) => {
   try {
     const { patient_id, doctor_id, appointment_date, appointment_time, reason, notes } = req.body;
 
+    const targetDoctorId = (req.user?.role === 'Doctor') ? req.user._id : (doctor_id || req.user._id);
+
     const appointment = await Appointment.create({
       patient_id,
-      doctor_id,
+      doctor_id: targetDoctorId,
       appointment_date: new Date(appointment_date),
       appointment_time,
       reason,
@@ -70,6 +78,10 @@ export const updateAppointmentStatus = async (req, res, next) => {
       return res.status(404).json({ success: false, message: 'Appointment not found' });
     }
 
+    if (req.user?.role === 'Doctor' && appointment.doctor_id?.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ success: false, message: 'Access denied. You can only update your own appointments.' });
+    }
+
     if (status) appointment.status = status;
     if (notes !== undefined) appointment.notes = notes;
 
@@ -86,6 +98,10 @@ export const deleteAppointment = async (req, res, next) => {
     const appointment = await Appointment.findById(req.params.id);
     if (!appointment) {
       return res.status(404).json({ success: false, message: 'Appointment not found' });
+    }
+
+    if (req.user?.role === 'Doctor' && appointment.doctor_id?.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ success: false, message: 'Access denied. You can only cancel your own appointments.' });
     }
 
     appointment.status = 'Cancelled';

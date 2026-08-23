@@ -117,3 +117,105 @@ export const applyDiscount = async (req, res, next) => {
     next(error);
   }
 };
+
+export const updateInvoice = async (req, res, next) => {
+  try {
+    const { items, discount, status } = req.body;
+    const invoice = await Invoice.findById(req.params.id);
+
+    if (!invoice) {
+      return res.status(404).json({ success: false, message: 'Invoice not found' });
+    }
+
+    if (items && Array.isArray(items)) {
+      invoice.items = items.map(item => {
+        const qty = Number(item.quantity) || 1;
+        const unit = Number(item.unit_price) || 0;
+        return {
+          item_type: item.item_type || 'Other',
+          description: item.description || 'Service',
+          quantity: qty,
+          unit_price: unit,
+          total_price: qty * unit,
+          paid_status: item.paid_status || 'Unpaid'
+        };
+      });
+      invoice.subtotal = invoice.items.reduce((acc, i) => acc + (i.total_price || 0), 0);
+    }
+
+    if (discount !== undefined) {
+      invoice.discount = Math.max(0, Number(discount) || 0);
+    }
+
+    invoice.total_amount = Math.max(0, invoice.subtotal - (invoice.discount || 0));
+    invoice.balance = Math.max(0, invoice.total_amount - (invoice.paid_amount || 0));
+
+    if (invoice.balance <= 0 && invoice.total_amount > 0) {
+      invoice.status = 'Paid';
+    } else if (invoice.paid_amount > 0 && invoice.balance > 0) {
+      invoice.status = 'Partially Paid';
+    } else {
+      invoice.status = status || (invoice.balance <= 0 ? 'Paid' : 'Unpaid');
+    }
+
+    await invoice.save();
+
+    await logAudit({
+      user: req.user,
+      action: 'UPDATE_INVOICE',
+      entity: 'Invoice',
+      entity_id: invoice._id,
+      details: {
+        invoice_number: invoice.invoice_number,
+        subtotal: invoice.subtotal,
+        discount: invoice.discount,
+        total_amount: invoice.total_amount,
+        balance: invoice.balance,
+        items_count: invoice.items.length
+      }
+    });
+
+    const populatedInvoice = await Invoice.findById(invoice._id)
+      .populate('patient_id', 'name patient_number telephone')
+      .populate({
+        path: 'visit_id',
+        select: 'visit_number status doctor_id',
+        populate: { path: 'doctor_id', select: 'full_name username specialization' }
+      })
+      .populate('doctor_id', 'full_name username specialization');
+
+    res.json({
+      success: true,
+      message: 'Invoice updated successfully',
+      data: populatedInvoice
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const deleteInvoice = async (req, res, next) => {
+  try {
+    const invoice = await Invoice.findById(req.params.id);
+    if (!invoice) {
+      return res.status(404).json({ success: false, message: 'Invoice not found' });
+    }
+
+    await logAudit({
+      user: req.user,
+      action: 'DELETE_INVOICE',
+      entity: 'Invoice',
+      entity_id: invoice._id,
+      details: { invoice_number: invoice.invoice_number }
+    });
+
+    await Invoice.findByIdAndDelete(req.params.id);
+
+    res.json({
+      success: true,
+      message: 'Invoice deleted successfully'
+    });
+  } catch (error) {
+    next(error);
+  }
+};

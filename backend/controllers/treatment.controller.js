@@ -10,9 +10,16 @@ export const getTreatments = async (req, res, next) => {
   try {
     const { visit_id, patient_id, doctor_id } = req.query;
     let filter = {};
+
+    // Strict Doctor Scoping: Doctors ONLY see their assigned treatments
+    if (req.user?.role === 'Doctor') {
+      filter.doctor_id = req.user._id;
+    } else if (doctor_id) {
+      filter.doctor_id = doctor_id;
+    }
+
     if (visit_id) filter.visit_id = visit_id;
     if (patient_id) filter.patient_id = patient_id;
-    if (doctor_id) filter.doctor_id = doctor_id;
 
     const treatments = await Treatment.find(filter)
       .populate('patient_id', 'name patient_number telephone')

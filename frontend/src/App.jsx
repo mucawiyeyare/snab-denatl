@@ -5,6 +5,7 @@ import Layout from './components/layout/Layout.jsx';
 
 // Pages
 import Login from './pages/auth/Login.jsx';
+import Signup from './pages/auth/Signup.jsx';
 import Unauthorized from './pages/unauthorized/Unauthorized.jsx';
 import Dashboard from './pages/dashboard/Dashboard.jsx';
 import PatientList from './pages/patients/PatientList.jsx';
@@ -31,6 +32,7 @@ function App() {
     <Routes>
       {/* Public Auth Routes */}
       <Route path="/login" element={<Login />} />
+      <Route path="/signup" element={<Signup />} />
       <Route path="/unauthorized" element={<Unauthorized />} />
 
       {/* Protected Main Layout */}

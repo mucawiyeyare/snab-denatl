@@ -64,21 +64,30 @@ export const createUser = async (req, res, next) => {
 
 export const updateUser = async (req, res, next) => {
   try {
-    const { role, employee_id, full_name, email, status, password } = req.body;
+    const { username, role, employee_id, full_name, email, status, password } = req.body;
     const user = await User.findById(req.params.id);
 
     if (!user) {
       return res.status(404).json({ success: false, message: 'User not found' });
     }
 
+    if (username && username.trim().toLowerCase() !== user.username) {
+      const cleanUsername = username.trim().toLowerCase();
+      const existing = await User.findOne({ username: cleanUsername });
+      if (existing && existing._id.toString() !== user._id.toString()) {
+        return res.status(400).json({ success: false, message: 'Username is already taken by another account.' });
+      }
+      user.username = cleanUsername;
+    }
+
     if (role) user.role = role;
     if (employee_id !== undefined) user.employee_id = employee_id || undefined;
-    if (full_name) user.full_name = full_name;
-    if (email) user.email = email;
+    if (full_name !== undefined) user.full_name = full_name;
+    if (email !== undefined) user.email = email;
     if (status) user.status = status;
-    if (password) {
+    if (password && password.trim()) {
       const salt = await bcrypt.genSalt(10);
-      user.password_hash = await bcrypt.hash(password, salt);
+      user.password_hash = await bcrypt.hash(password.trim(), salt);
     }
 
     await user.save();
@@ -92,7 +101,7 @@ export const updateUser = async (req, res, next) => {
     });
 
     const updatedUser = await User.findById(user._id).select('-password_hash').populate('employee_id');
-    res.json({ success: true, data: updatedUser });
+    res.json({ success: true, message: 'User updated successfully', data: updatedUser });
   } catch (error) {
     next(error);
   }
@@ -105,19 +114,29 @@ export const deleteUser = async (req, res, next) => {
       return res.status(404).json({ success: false, message: 'User not found' });
     }
 
-    // Soft deactivate or delete
-    user.status = 'Inactive';
-    await user.save();
+    // Safety check: Admin cannot delete their own account
+    if (req.user?._id && user._id.toString() === req.user._id.toString()) {
+      return res.status(400).json({
+        success: false,
+        message: 'Security protection: You cannot delete your own logged-in admin account.'
+      });
+    }
+
+    const deletedUsername = user.username;
+    const deletedRole = user.role;
+
+    // Permanently remove user record
+    await User.findByIdAndDelete(req.params.id);
 
     await logAudit({
       user: req.user,
-      action: 'DEACTIVATE_USER',
+      action: 'DELETE_USER',
       entity: 'User',
-      entity_id: user._id,
-      details: { username: user.username }
+      entity_id: req.params.id,
+      details: { username: deletedUsername, role: deletedRole }
     });
 
-    res.json({ success: true, message: 'User deactivated successfully' });
+    res.json({ success: true, message: `User @${deletedUsername} deleted successfully` });
   } catch (error) {
     next(error);
   }

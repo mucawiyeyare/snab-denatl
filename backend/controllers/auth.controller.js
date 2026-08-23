@@ -9,6 +9,60 @@ const generateToken = (id) => {
   });
 };
 
+export const register = async (req, res, next) => {
+  try {
+    const { username, password, full_name, email, role } = req.body;
+
+    if (!username || !password || !full_name || !role) {
+      return res.status(400).json({ success: false, message: 'Please provide username, password, full name, and role.' });
+    }
+
+    const allowedRoles = ['Admin', 'Doctor', 'Receptionist/Cashier'];
+    if (!allowedRoles.includes(role)) {
+      return res.status(400).json({ success: false, message: 'Invalid role. Please select Admin, Doctor, or Receptionist/Cashier.' });
+    }
+
+    if (password.length < 6) {
+      return res.status(400).json({ success: false, message: 'Password must be at least 6 characters.' });
+    }
+
+    const exists = await User.findOne({ username: username.toLowerCase() });
+    if (exists) {
+      return res.status(409).json({ success: false, message: 'Username is already taken. Please choose another.' });
+    }
+
+    const salt = await bcrypt.genSalt(10);
+    const password_hash = await bcrypt.hash(password, salt);
+
+    const newUser = await User.create({
+      username: username.toLowerCase().trim(),
+      password_hash,
+      full_name: full_name.trim(),
+      email: email?.toLowerCase().trim() || '',
+      role,
+      status: 'Inactive' // Requires Admin approval
+    });
+
+    await logAudit({
+      user: { _id: newUser._id, username: newUser.username, role: newUser.role },
+      action: 'REGISTER',
+      entity: 'User',
+      entity_id: newUser._id,
+      details: { username: newUser.username, role: newUser.role, status: 'Pending Admin Approval' },
+      ip_address: req.ip
+    });
+
+    return res.status(201).json({
+      success: true,
+      message: 'Account created successfully! Your account is pending administrator approval. You will be able to log in once your account is activated.'
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+
+
 export const login = async (req, res, next) => {
   try {
     const { username, password } = req.body;

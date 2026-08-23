@@ -40,6 +40,18 @@ const patientSchema = new mongoose.Schema({
     type: Date,
     default: Date.now
   },
+  assigned_doctor_id: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User'
+  },
+  assigned_doctor_name: {
+    type: String,
+    default: ''
+  },
+  primary_doctor_id: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User'
+  },
   medical_info: {
     blood_group: { type: String, default: '' },
     allergies: [{ type: String }],

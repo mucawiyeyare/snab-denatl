@@ -41,7 +41,7 @@ const Sidebar = ({ isOpen, onClose, onOpenProfile }) => {
         { label: 'Dental Treatments', path: '/treatments', icon: HeartPulse },
         { label: 'Dental Services Catalog', path: '/services', icon: Sparkles },
         { label: 'Dental Inventory', path: '/inventory', icon: Boxes },
-        { label: 'Laboratory Module', path: '/lab', icon: TestTube2 },
+        { label: 'Laboratory Sessions', path: '/lab', icon: TestTube2 },
         { label: 'Appointments', path: '/appointments', icon: Calendar },
         { label: 'Reports & Analytics', path: '/reports', icon: FileBarChart },
         { label: 'Settings', path: '/settings', icon: Settings }
@@ -55,7 +55,7 @@ const Sidebar = ({ isOpen, onClose, onOpenProfile }) => {
         { label: 'Visits & Patient Flow', path: '/visits', icon: Activity },
         { label: 'Doctors', path: '/doctors', icon: UserCheck },
         { label: 'Appointments', path: '/appointments', icon: Calendar },
-        { label: 'Laboratory Module', path: '/lab', icon: TestTube2 },
+        { label: 'Laboratory Sessions', path: '/lab', icon: TestTube2 },
         { label: 'Billing & Invoices', path: '/billing', icon: CreditCard },
         { label: 'Cashier & Receipts', path: '/payments', icon: Receipt },
         { label: 'Reports & Analytics', path: '/reports', icon: FileBarChart }
@@ -73,7 +73,7 @@ const Sidebar = ({ isOpen, onClose, onOpenProfile }) => {
       { label: 'Dental Treatments', path: '/treatments', icon: HeartPulse },
       { label: 'Dental Services', path: '/services', icon: Sparkles },
       { label: 'Dental Inventory', path: '/inventory', icon: Boxes },
-      { label: 'Laboratory Module', path: '/lab', icon: TestTube2 },
+      { label: 'Laboratory Sessions', path: '/lab', icon: TestTube2 },
       { label: 'Billing & Invoices', path: '/billing', icon: CreditCard },
       { label: 'Cashier & Receipts', path: '/payments', icon: Receipt },
       { label: 'Staff Directory', path: '/employees', icon: Contact },

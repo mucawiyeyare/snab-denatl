@@ -2,8 +2,10 @@ import api from './axios.js';
 
 // Auth
 export const loginApi = (credentials) => api.post('/auth/login', credentials);
+export const registerApi = (data) => api.post('/auth/register', data);
 export const getMeApi = () => api.get('/auth/me');
 export const updatePasswordApi = (data) => api.put('/auth/update-password', data);
+
 
 // Patients
 export const getPatientsApi = (params) => api.get('/patients', { params });
@@ -44,7 +46,9 @@ export const deleteLabTestApi = (id) => api.delete(`/lab-tests/${id}`);
 
 export const getLabRequestsApi = (params) => api.get('/lab-requests', { params });
 export const createLabRequestApi = (data) => api.post('/lab-requests', data);
+export const processLabSessionApi = (id, data) => api.post(`/lab-requests/${id}/process-session`, data);
 export const updateLabRequestStatusApi = (id, data) => api.patch(`/lab-requests/${id}/status`, data);
+export const deleteLabRequestApi = (id) => api.delete(`/lab-requests/${id}`);
 
 export const getLabResultsApi = (params) => api.get('/lab-results', { params });
 export const createLabResultApi = (data) => api.post('/lab-results', data);
@@ -55,6 +59,8 @@ export const getInvoicesApi = (params) => api.get('/invoices', { params });
 export const getInvoiceByIdApi = (id) => api.get(`/invoices/${id}`);
 export const getVisitInvoiceApi = (visitId) => api.get(`/invoices/visit/${visitId}`);
 export const applyDiscountApi = (id, data) => api.patch(`/invoices/${id}/discount`, data);
+export const updateInvoiceApi = (id, data) => api.put(`/invoices/${id}`, data);
+export const deleteInvoiceApi = (id) => api.delete(`/invoices/${id}`);
 
 export const getPaymentsApi = (params) => api.get('/payments', { params });
 export const getPaymentByIdApi = (id) => api.get(`/payments/${id}`);
@@ -93,7 +99,8 @@ export const recordItemUsageApi = (id, data) => api.post(`/inventory/${id}/usage
 export const deleteInventoryApi = (id) => api.delete(`/inventory/${id}`);
 
 // Reports & Audit & Settings
-export const getDashboardStatsApi = () => api.get('/reports/dashboard-stats');
+export const getDashboardStatsApi = (params) => api.get('/reports/dashboard-stats', { params });
+export const globalSearchApi = (params) => api.get('/reports/search', { params });
 export const getDoctorPerformanceReportApi = () => api.get('/reports/doctor-performance');
 export const getServiceAnalyticsApi = () => api.get('/reports/service-analytics');
 

@@ -25,6 +25,10 @@ const labResultSchema = new mongoose.Schema({
     type: String,
     required: true
   },
+  cost: {
+    type: Number,
+    default: 0
+  },
   result: {
     type: String,
     required: true
