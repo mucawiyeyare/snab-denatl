@@ -64,7 +64,7 @@ export const createUser = async (req, res, next) => {
 
 export const updateUser = async (req, res, next) => {
   try {
-    const { username, role, employee_id, full_name, email, status, password } = req.body;
+    const { username, role, employee_id, full_name, email, status, password, profile_image } = req.body;
     const user = await User.findById(req.params.id);
 
     if (!user) {
@@ -84,6 +84,7 @@ export const updateUser = async (req, res, next) => {
     if (employee_id !== undefined) user.employee_id = employee_id || undefined;
     if (full_name !== undefined) user.full_name = full_name;
     if (email !== undefined) user.email = email;
+    if (profile_image !== undefined) user.profile_image = profile_image;
     if (status) user.status = status;
     if (password && password.trim()) {
       const salt = await bcrypt.genSalt(10);
