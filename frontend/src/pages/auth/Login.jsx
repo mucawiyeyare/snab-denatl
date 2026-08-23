@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext.jsx';
 import { Lock, User, AlertCircle, ArrowRight } from 'lucide-react';
 
@@ -25,12 +25,6 @@ const Login = () => {
     } else {
       setError(res.message);
     }
-  };
-
-  const setDemoCredentials = (u, p) => {
-    setUsername(u);
-    setPassword(p);
-    setError('');
   };
 
   return (
@@ -116,49 +110,6 @@ const Login = () => {
             )}
           </button>
         </form>
-
-        {/* Quick Demo Accounts (Admin, Doctor, Receptionist/Cashier) */}
-        <div className="pt-4 border-t border-slate-100">
-          <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider text-center mb-2.5">
-            Quick 1-Click Demo Logins
-          </p>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
-            <button
-              type="button"
-              onClick={() => setDemoCredentials('admin', 'admin123')}
-              className="p-2.5 rounded-xl bg-slate-50 hover:bg-blue-50 hover:text-blue-700 border border-slate-200 text-slate-700 font-semibold transition text-left"
-            >
-              👑 <span className="font-bold block text-xs">Admin</span>
-              <span className="block text-[10px] text-slate-400 font-normal">admin / admin123</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setDemoCredentials('drhassan', 'doctor123')}
-              className="p-2.5 rounded-xl bg-slate-50 hover:bg-blue-50 hover:text-blue-700 border border-slate-200 text-slate-700 font-semibold transition text-left"
-            >
-              🩺 <span className="font-bold block text-xs">Doctor</span>
-              <span className="block text-[10px] text-slate-400 font-normal">drhassan / doctor123</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setDemoCredentials('cashier', 'cashier123')}
-              className="p-2.5 rounded-xl bg-slate-50 hover:bg-blue-50 hover:text-blue-700 border border-slate-200 text-slate-700 font-semibold transition text-left"
-            >
-              💳 <span className="font-bold block text-xs">Cashier</span>
-              <span className="block text-[10px] text-slate-400 font-normal">cashier / cashier123</span>
-            </button>
-          </div>
-        </div>
-
-        {/* Sign up link */}
-        <div className="pt-3 border-t border-slate-100 text-center">
-          <p className="text-xs text-slate-500">
-            New staff member?{' '}
-            <Link to="/signup" className="font-bold text-blue-600 hover:text-blue-700 transition">
-              Create an account
-            </Link>
-          </p>
-        </div>
 
       </div>
     </div>
