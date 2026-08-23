@@ -40,7 +40,7 @@ export const register = async (req, res, next) => {
       full_name: full_name.trim(),
       email: email?.toLowerCase().trim() || '',
       role,
-      status: 'Inactive' // Requires Admin approval
+      status: 'Active' // Active immediately
     });
 
     await logAudit({
@@ -48,13 +48,13 @@ export const register = async (req, res, next) => {
       action: 'REGISTER',
       entity: 'User',
       entity_id: newUser._id,
-      details: { username: newUser.username, role: newUser.role, status: 'Pending Admin Approval' },
+      details: { username: newUser.username, role: newUser.role, status: 'Active' },
       ip_address: req.ip
     });
 
     return res.status(201).json({
       success: true,
-      message: 'Account created successfully! Your account is pending administrator approval. You will be able to log in once your account is activated.'
+      message: 'Account created successfully! You can now log in with your credentials.'
     });
   } catch (error) {
     next(error);

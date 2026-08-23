@@ -136,11 +136,11 @@ const Signup = () => {
           </div>
         </div>
 
-        {/* Admin Approval Notice */}
+        {/* Instant Access Notice */}
         <div className="flex items-start gap-2.5 p-3 bg-blue-50 border border-blue-200 text-blue-700 rounded-xl text-xs">
           <ShieldCheck className="w-4 h-4 shrink-0 mt-0.5" />
           <p className="font-semibold leading-relaxed">
-            New accounts require <span className="font-black">administrator approval</span> before you can log in. Contact your system admin after registering.
+            Create your staff profile (Admin, Doctor, or Receptionist/Cashier) to get immediate access.
           </p>
         </div>
 
@@ -154,18 +154,18 @@ const Signup = () => {
 
         {/* Success Alert */}
         {success && (
-          <div className="flex flex-col gap-2 p-4 bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-xl text-xs">
+          <div className="flex flex-col gap-3 p-5 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-2xl text-xs">
             <div className="flex items-center gap-2 font-bold text-sm">
-              <CheckCircle2 className="w-5 h-5 shrink-0" />
+              <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
               <span>Account Created Successfully!</span>
             </div>
-            <p className="text-emerald-600 leading-relaxed pl-7">{success}</p>
+            <p className="text-emerald-700 leading-relaxed">{success}</p>
             <button
               onClick={() => navigate("/login")}
-              className="mt-2 ml-7 text-xs font-bold text-blue-600 hover:text-blue-700 inline-flex items-center gap-1 transition cursor-pointer"
+              className="w-full mt-2 py-2.5 px-4 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl shadow-xs transition flex items-center justify-center gap-2 cursor-pointer text-xs"
             >
-              <ArrowLeft className="w-3 h-3" />
-              Back to Login
+              <span>Proceed to Login</span>
+              <ArrowRight className="w-3.5 h-3.5" />
             </button>
           </div>
         )}
