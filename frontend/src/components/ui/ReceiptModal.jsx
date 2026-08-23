@@ -9,7 +9,8 @@ const ReceiptModal = ({ isOpen, onClose, payment }) => {
     const visit   = payment.visit_id   || {};
     const invoice  = payment.invoice_id || {};
     const doctor   = payment.doctor_id || visit.doctor_id || invoice.doctor_id;
-    const doctorName = doctor ? (doctor.full_name || doctor.username || (typeof doctor === 'string' ? doctor : '')) : '';
+    const rawDoctorName = doctor ? (doctor.full_name || doctor.username || (typeof doctor === 'string' ? doctor : '')) : '';
+    const formattedDoctor = rawDoctorName ? (rawDoctorName.startsWith('Dr.') ? rawDoctorName : `Dr. ${rawDoctorName}`) : 'Attending Doctor';
 
     const printWindow = window.open('', '_blank', 'width=794,height=1123');
     printWindow.document.write(`<!DOCTYPE html>
@@ -155,7 +156,7 @@ const ReceiptModal = ({ isOpen, onClose, payment }) => {
       </div>
       <div>
         <div class="patient-field-label">Doctor:</div>
-        <div class="patient-field-value">${doctorName ? `Dr. ${doctorName}` : 'Attending Doctor'}</div>
+        <div class="patient-field-value">${formattedDoctor}</div>
       </div>
       <div>
         <div class="patient-field-label">Visit No:</div>
@@ -247,7 +248,8 @@ const ReceiptModal = ({ isOpen, onClose, payment }) => {
   const visit = payment.visit_id || {};
   const invoice = payment.invoice_id || {};
   const doctor = payment.doctor_id || visit.doctor_id || invoice.doctor_id;
-  const doctorName = doctor ? (doctor.full_name || doctor.username || (typeof doctor === 'string' ? doctor : '')) : '';
+  const rawDoctorName = doctor ? (doctor.full_name || doctor.username || (typeof doctor === 'string' ? doctor : '')) : '';
+  const formattedDoctor = rawDoctorName ? (rawDoctorName.startsWith('Dr.') ? rawDoctorName : `Dr. ${rawDoctorName}`) : 'Attending Doctor';
 
   return (
     <div
@@ -343,7 +345,7 @@ const ReceiptModal = ({ isOpen, onClose, payment }) => {
               </div>
               <div>
                 <p className="text-slate-500 text-[11px]">Doctor:</p>
-                <p className="font-bold text-slate-800">{doctorName ? `Dr. ${doctorName}` : 'Attending Doctor'}</p>
+                <p className="font-bold text-slate-800">{formattedDoctor}</p>
               </div>
               <div>
                 <p className="text-slate-500 text-[11px]">Visit No:</p>

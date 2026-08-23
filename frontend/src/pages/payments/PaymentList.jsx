@@ -123,11 +123,17 @@ const PaymentList = () => {
               <tbody className="divide-y divide-slate-100 font-medium">
                 {filtered.map(p => {
                   const doc = p.doctor_id || p.visit_id?.doctor_id || p.invoice_id?.doctor_id;
-                  const docName = doc?.full_name || doc?.username;
+                  const rawDocName = doc?.full_name || doc?.username || '';
+                  const docName = rawDocName ? (rawDocName.startsWith('Dr.') ? rawDocName : `Dr. ${rawDocName}`) : '—';
                   return (
                   <tr key={p._id} className="hover:bg-slate-50/80 transition">
-                    <td className="py-4 px-5 font-mono font-bold text-blue-600">
-                      {p.receipt_number}
+                    <td className="py-4 px-5">
+                      <button
+                        onClick={() => handleOpenReceipt(p)}
+                        className="font-mono font-bold text-blue-600 hover:text-blue-800 hover:underline cursor-pointer text-left"
+                      >
+                        {p.receipt_number}
+                      </button>
                     </td>
                     <td className="py-4 px-4 text-slate-500">
                       {new Date(p.payment_date).toLocaleString()}
@@ -137,7 +143,7 @@ const PaymentList = () => {
                       <span className="text-[11px] text-slate-400">{p.patient_id?.telephone}</span>
                     </td>
                     <td className="py-4 px-4 text-slate-700">
-                      <span className="font-semibold text-slate-900 block">{docName ? `Dr. ${docName}` : '—'}</span>
+                      <span className="font-semibold text-slate-900 block">{docName}</span>
                     </td>
                     <td className="py-4 px-4 font-semibold text-slate-700">
                       {p.payment_category}
@@ -155,7 +161,7 @@ const PaymentList = () => {
                     </td>
                     <td className="py-4 px-5 text-right">
                       <button
-                        onClick={() => handleViewReceipt(p)}
+                        onClick={() => handleOpenReceipt(p)}
                         className="px-3 py-1.5 bg-blue-50 hover:bg-blue-600 hover:text-white font-bold text-blue-600 rounded-xl transition text-xs flex items-center gap-1.5 ml-auto cursor-pointer"
                       >
                         <Printer className="w-3.5 h-3.5" />
