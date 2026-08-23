@@ -74,6 +74,7 @@ const LabManager = () => {
   const [selectedRequest, setSelectedRequest] = useState(null);
   const [sessionTests, setSessionTests] = useState([]);
   const [sessionForm, setSessionForm] = useState({
+    testing_fee: 3,
     notes: '',
     payment_method: 'Cash',
     mark_paid: true
@@ -176,7 +177,7 @@ const LabManager = () => {
           category: t.category || '',
           sample_type: t.sample_type || '',
           reference_range: t.reference_range || '',
-          cost: t.cost !== undefined && t.cost !== null && t.cost !== 0 ? t.cost : (t.price || ''),
+          cost: 0,
           result: t.result || '',
           clinical_interpretation: t.clinical_interpretation || 'Normal'
         }))
@@ -187,7 +188,7 @@ const LabManager = () => {
             category: req.test_id?.category || '',
             sample_type: req.test_id?.sample_type || '',
             reference_range: '',
-            cost: req.cost || req.price || '',
+            cost: 0,
             result: req.result || '',
             clinical_interpretation: 'Normal'
           }
@@ -195,6 +196,7 @@ const LabManager = () => {
 
     setSessionTests(testList);
     setSessionForm({
+      testing_fee: req.total_cost || req.cost || 3,
       notes: req.notes || '',
       payment_method: 'Cash',
       mark_paid: true
@@ -212,10 +214,14 @@ const LabManager = () => {
       return;
     }
 
+    const testingFeeNum = Number(sessionForm.testing_fee !== '' && !isNaN(Number(sessionForm.testing_fee)) ? sessionForm.testing_fee : 3);
+
     setSubmitting(true);
     try {
       await processLabSessionApi(selectedRequest._id, {
         tests: sessionTests,
+        cost: testingFeeNum,
+        testing_fee: testingFeeNum,
         notes: sessionForm.notes,
         payment_method: sessionForm.payment_method,
         mark_paid: sessionForm.mark_paid
@@ -223,7 +229,7 @@ const LabManager = () => {
       setIsSessionModalOpen(false);
       setSelectedRequest(null);
       fetchLabData();
-      showToast(`Laboratory request completed for ${selectedRequest.patient_id?.name || 'patient'} and sent to Doctor!`);
+      showToast(`Laboratory results recorded & sent back to Doctor! Fee: $${testingFeeNum.toFixed(2)}`);
     } catch (err) {
       console.error('Error processing lab session:', err);
       alert(err.response?.data?.message || 'Error processing session');
@@ -796,21 +802,50 @@ const LabManager = () => {
               <div className="text-right">
                 <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Requested By</span>
                 <p className="text-xs font-bold text-slate-800">Dr. {selectedRequest?.doctor_id?.full_name || selectedRequest?.doctor_id?.username}</p>
-                <p className="text-[10px] text-purple-700 font-bold mt-0.5">
+                        <p className="text-[10px] text-purple-700 font-bold mt-0.5">
                   Reason: {selectedRequest?.reason || 'Pre-treatment screening'}
                 </p>
               </div>
             </div>
           </div>
 
-          {/* Table of Individual Tests (with Cost & Result per Test) */}
+          {/* One-Time Testing Fee Configuration */}
+          <div className="p-3.5 bg-gradient-to-r from-purple-50 to-indigo-50 border border-purple-200 rounded-2xl flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-xl bg-purple-600 text-white flex items-center justify-center font-bold text-xs shadow-xs">
+                $
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-purple-950">
+                  One-Time Laboratory Testing Fee ($)
+                </label>
+                <p className="text-[10px] text-purple-700 font-medium">
+                  Flat fee covering all {sessionTests.length} requested tests in this order
+                </p>
+              </div>
+            </div>
+            <div className="relative w-32 shrink-0">
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-xs">$</span>
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                required
+                value={sessionForm.testing_fee}
+                onChange={(e) => setSessionForm({ ...sessionForm, testing_fee: e.target.value })}
+                className="w-full pl-7 pr-3 py-2 bg-white border border-purple-300 rounded-xl text-sm font-black text-purple-950 text-right focus:outline-hidden focus:ring-2 focus:ring-purple-500 font-mono shadow-2xs"
+              />
+            </div>
+          </div>
+
+          {/* Table of Individual Tests (with Result per Test) */}
           <div>
             <div className="flex justify-between items-center mb-2">
               <label className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
                 <TestTube2 className="w-4 h-4 text-purple-600" />
-                <span>Requested Tests ({sessionTests.length}) — Individual Costs & Results</span>
+                <span>Requested Tests ({sessionTests.length}) — Enter Clinical Results</span>
               </label>
-              <span className="text-[11px] text-slate-400">Enter cost & result for each test</span>
+              <span className="text-[11px] text-slate-400">Record outcomes for doctor review</span>
             </div>
 
             <div className="space-y-2.5 max-h-72 overflow-y-auto pr-1">
@@ -828,41 +863,18 @@ const LabManager = () => {
                     </span>
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-12 gap-2.5 items-center">
-                    {/* Cost Input (4 cols) */}
-                    <div className="sm:col-span-4">
-                      <label className="block text-[10px] font-bold text-slate-600 mb-0.5">Cost ($)</label>
-                      <div className="relative">
-                        <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 font-bold">$</span>
-                        <input
-                          type="number"
-                          min="0"
-                          step="0.01"
-                          placeholder="0.00"
-                          value={t.cost}
-                          onChange={(e) => {
-                            const val = e.target.value;
-                            setSessionTests(prev => prev.map((item, i) => i === idx ? { ...item, cost: val } : item));
-                          }}
-                          className="w-full pl-6 pr-2.5 py-1.5 rounded-xl border border-slate-200 text-xs font-bold text-slate-900 focus:outline-none focus:border-purple-500 bg-slate-50/50"
-                        />
-                      </div>
-                    </div>
-
-                    {/* Result Input (8 cols) */}
-                    <div className="sm:col-span-8">
-                      <label className="block text-[10px] font-bold text-slate-600 mb-0.5">Result</label>
-                      <input
-                        type="text"
-                        placeholder="e.g. Normal, Negative, 98 mg/dL, O+"
-                        value={t.result}
-                        onChange={(e) => {
-                          const val = e.target.value;
-                          setSessionTests(prev => prev.map((item, i) => i === idx ? { ...item, result: val } : item));
-                        }}
-                        className="w-full px-3 py-1.5 rounded-xl border border-slate-200 text-xs font-bold text-blue-900 placeholder:text-slate-400 focus:outline-none focus:border-purple-500 bg-white"
-                      />
-                    </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-600 mb-1">Test Outcome / Value *</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. Normal, Negative, Non-Reactive, 98 mg/dL, Positive, O+"
+                      value={t.result}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setSessionTests(prev => prev.map((item, i) => i === idx ? { ...item, result: val } : item));
+                      }}
+                      className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-bold text-slate-900 placeholder:text-slate-400 focus:outline-hidden focus:ring-2 focus:ring-purple-500 bg-slate-50/40"
+                    />
                   </div>
 
                   {/* Quick Result Chips for this Test */}
@@ -875,9 +887,9 @@ const LabManager = () => {
                         onClick={() => {
                           setSessionTests(prev => prev.map((item, i) => i === idx ? { ...item, result: res } : item));
                         }}
-                        className={`px-2 py-0.5 rounded-md text-[10px] font-bold transition cursor-pointer border ${
+                        className={`px-2.5 py-0.5 rounded-lg text-[10px] font-bold transition cursor-pointer border ${
                           t.result === res
-                            ? 'bg-purple-600 text-white border-purple-600'
+                            ? 'bg-purple-600 text-white border-purple-600 shadow-2xs'
                             : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
                         }`}
                       >
@@ -892,12 +904,12 @@ const LabManager = () => {
             {/* Live Calculated Total Cost Bar */}
             <div className="mt-3 p-3 bg-slate-900 text-white rounded-2xl flex justify-between items-center shadow-sm">
               <div>
-                <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Total Laboratory Cost</span>
-                <p className="text-[11px] text-slate-300">Sum of all {sessionTests.length} tests in this request</p>
+                <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Total Laboratory Charge</span>
+                <p className="text-[11px] text-slate-300">One-time fee for all {sessionTests.length} tests</p>
               </div>
               <div className="text-right">
                 <span className="font-mono text-lg font-black text-emerald-400">
-                  ${sessionTests.reduce((acc, t) => acc + (parseFloat(t.cost) || 0), 0).toFixed(2)}
+                  ${(parseFloat(sessionForm.testing_fee) || 0).toFixed(2)}
                 </span>
               </div>
             </div>
@@ -906,14 +918,14 @@ const LabManager = () => {
           {/* General Notes */}
           <div>
             <label className="block text-[11px] font-bold text-slate-700 mb-1">
-              Laboratory Notes / Clinical Remarks (Optional)
+              Laboratory Notes / Remarks (Optional)
             </label>
             <input
               type="text"
               value={sessionForm.notes}
               onChange={(e) => setSessionForm({ ...sessionForm, notes: e.target.value })}
-              placeholder="e.g. Tests performed on fresh serum, verified by cashier/lab technician"
-              className="w-full px-3.5 py-2 rounded-xl border border-slate-200 text-xs text-slate-800 placeholder:text-slate-400 focus:outline-none focus:border-purple-500 bg-white transition"
+              placeholder="e.g. Tests verified by laboratory technician"
+              className="w-full px-3.5 py-2 rounded-xl border border-slate-200 text-xs text-slate-800 placeholder:text-slate-400 focus:outline-hidden focus:ring-2 focus:ring-purple-500 bg-white transition"
             />
           </div>
 
@@ -922,7 +934,7 @@ const LabManager = () => {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-xs font-bold text-purple-950">Approve & Record Payment at Cashier</p>
-                <p className="text-[10px] text-purple-700">One single payment transaction for the entire request</p>
+                <p className="text-[10px] text-purple-700">Collects ${(parseFloat(sessionForm.testing_fee) || 0).toFixed(2)} one-time testing fee</p>
               </div>
               <label className="relative inline-flex items-center cursor-pointer">
                 <input
@@ -970,22 +982,39 @@ const LabManager = () => {
               className="px-6 py-2.5 bg-purple-600 hover:bg-purple-700 active:scale-[0.99] text-white font-bold text-xs rounded-xl shadow-md transition cursor-pointer flex items-center gap-2 disabled:opacity-50"
             >
               <Send className="w-3.5 h-3.5" />
-              <span>{submitting ? 'Submitting...' : 'Submit All Results & Send to Doctor'}</span>
+              <span>{submitting ? 'Submitting...' : `Confirm Payment ($${(parseFloat(sessionForm.testing_fee) || 0).toFixed(2)}) & Send to Doctor`}</span>
             </button>
           </div>
         </form>
       </Modal>
 
-      {/* MODAL 2: DOCTOR REQUESTS LAB TEST */}
+      {/* MODAL 2: DOCTOR SENDS PATIENT TO LABORATORY */}
       <Modal
         isOpen={isRequestModalOpen}
         onClose={() => setIsRequestModalOpen(false)}
         icon={Stethoscope}
         title="Send Patient to Laboratory"
-        subtitle="Select required tests and clinical reason. Test cost will be handled by the cashier."
+        subtitle="Select required tests and clinical reason. One-time $3.00 testing fee will be handled by the cashier."
         maxWidth="max-w-xl"
       >
         <form onSubmit={submitDoctorLabRequest} className="space-y-3.5 text-xs">
+          
+          {/* One-Time Testing Fee Notice Banner */}
+          <div className="p-3 bg-purple-50 border border-purple-200 rounded-2xl flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <div className="w-7 h-7 rounded-xl bg-purple-600 text-white flex items-center justify-center font-bold text-xs">
+                $3
+              </div>
+              <div>
+                <p className="font-bold text-purple-900 text-xs">One-Time Testing Fee: $3.00</p>
+                <p className="text-[10px] text-purple-700">Flat rate applied once for all selected tests in this session.</p>
+              </div>
+            </div>
+            <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-purple-200/80 text-purple-900">
+              {requestSelectedTestIds.length} Selected
+            </span>
+          </div>
+
           {/* Select Active Patient Visit */}
           <div>
             <SearchableSelect
@@ -1005,7 +1034,7 @@ const LabManager = () => {
             />
           </div>
 
-          {/* Test Checkbox List (No forced prices shown) */}
+          {/* Test Checkbox List */}
           <div>
             <label className="block text-[11px] font-bold text-slate-700 mb-1.5">
               Select Required Lab Test(s) ({requestSelectedTestIds.length} selected) *
@@ -1019,21 +1048,21 @@ const LabManager = () => {
                     onClick={() => handleToggleTestInRequest(test._id)}
                     className={`p-2.5 rounded-xl border flex items-center justify-between gap-2 cursor-pointer transition ${
                       isChecked
-                        ? 'bg-blue-50/80 border-blue-500 text-blue-900 shadow-2xs font-bold'
+                        ? 'bg-purple-50 border-purple-400 text-purple-900 shadow-2xs font-bold'
                         : 'bg-white border-slate-200 text-slate-700 hover:border-slate-300'
                     }`}
                   >
                     <div className="flex items-center gap-2">
                       <div
-                        className={`w-4 h-4 rounded-md flex items-center justify-center border ${
-                          isChecked ? 'bg-blue-600 border-blue-600 text-white' : 'border-slate-300 bg-white'
+                        className={`w-4 h-4 rounded-md flex items-center justify-center border transition ${
+                          isChecked ? 'bg-purple-600 border-purple-600 text-white' : 'border-slate-300 bg-white'
                         }`}
                       >
                         {isChecked && <CheckCircle className="w-3.5 h-3.5" />}
                       </div>
-                      <span className="text-xs">{test.test_name}</span>
+                      <span className="text-xs font-bold">{test.test_name}</span>
                     </div>
-                    <span className="text-[10px] text-slate-400 font-normal">{test.category}</span>
+                    <span className="text-[10px] bg-slate-100 px-2 py-0.5 rounded text-slate-600 font-medium">{test.category}</span>
                   </div>
                 );
               })}
@@ -1049,8 +1078,8 @@ const LabManager = () => {
               type="text"
               value={requestReason}
               onChange={(e) => setRequestReason(e.target.value)}
-              placeholder="e.g. Pre-treatment screening, extraction preparation"
-              className="w-full px-3.5 py-2 rounded-xl border border-slate-200 text-xs text-slate-800 placeholder:text-slate-400 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white transition"
+              placeholder="e.g. Pre-extraction blood glucose, HIV & coagulation screening"
+              className="w-full px-3.5 py-2 rounded-xl border border-slate-200 text-xs text-slate-800 placeholder:text-slate-400 focus:outline-hidden focus:ring-2 focus:ring-purple-500 bg-white transition"
             />
           </div>
 
@@ -1065,7 +1094,7 @@ const LabManager = () => {
             <button
               type="submit"
               disabled={submitting || requestSelectedTestIds.length === 0}
-              className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 active:scale-[0.99] text-white font-bold text-xs rounded-xl shadow-md transition cursor-pointer disabled:opacity-50 flex items-center gap-1.5"
+              className="px-5 py-2.5 bg-purple-600 hover:bg-purple-700 active:scale-[0.99] text-white font-bold text-xs rounded-xl shadow-md transition cursor-pointer disabled:opacity-50 flex items-center gap-1.5"
             >
               <Send className="w-3.5 h-3.5" />
               <span>{submitting ? 'Sending...' : 'Send to Laboratory'}</span>

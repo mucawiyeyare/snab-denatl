@@ -74,15 +74,23 @@ export const getVisitById = async (req, res, next) => {
       });
     }
 
-    const [consultations, labRequests, labResults, treatments, invoices, payments, followups] = await Promise.all([
+    let [consultations, labRequests, labResults, treatments, invoices, payments, followups] = await Promise.all([
       Consultation.find({ visit_id: visit._id }).populate('doctor_id', 'full_name'),
-      LabRequest.find({ visit_id: visit._id }).populate('doctor_id', 'full_name').populate('test_id'),
-      LabResult.find({ visit_id: visit._id }).populate('doctor_id', 'full_name'),
+      LabRequest.find({ visit_id: visit._id }).populate('doctor_id', 'full_name').populate('tests.test_id').sort({ createdAt: -1 }),
+      LabResult.find({ visit_id: visit._id }).populate('doctor_id', 'full_name').sort({ createdAt: -1 }),
       Treatment.find({ visit_id: visit._id }).populate('doctor_id', 'full_name').populate('service_id'),
       Invoice.find({ visit_id: visit._id }),
       Payment.find({ visit_id: visit._id }).populate('received_by', 'full_name username'),
       Followup.find({ visit_id: visit._id })
     ]);
+
+    // Fallback: If no lab results/requests found directly under visit_id, check patient_id history
+    if (labRequests.length === 0 && visit.patient_id) {
+      labRequests = await LabRequest.find({ patient_id: visit.patient_id._id || visit.patient_id }).populate('doctor_id', 'full_name').populate('tests.test_id').sort({ createdAt: -1 });
+    }
+    if (labResults.length === 0 && visit.patient_id) {
+      labResults = await LabResult.find({ patient_id: visit.patient_id._id || visit.patient_id }).populate('doctor_id', 'full_name').sort({ createdAt: -1 });
+    }
 
     res.json({
       success: true,

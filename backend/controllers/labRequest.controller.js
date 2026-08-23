@@ -228,7 +228,14 @@ export const processLabSession = async (req, res, next) => {
       }];
     }
 
-    const totalCost = updatedTests.reduce((acc, t) => acc + (t.cost || 0), 0);
+    // Unified Testing Cost: single flat rate for the entire lab session (default $3)
+    const unifiedFee = cost !== undefined && cost !== '' && !isNaN(Number(cost))
+      ? Number(cost)
+      : (req.body.testing_fee !== undefined && req.body.testing_fee !== '' && !isNaN(Number(req.body.testing_fee))
+        ? Number(req.body.testing_fee)
+        : 3);
+
+    const totalCost = unifiedFee;
     const combinedResultsStr = updatedTests.map(t => `${t.test_name}: ${t.result || 'Pending'}`).join(' | ');
 
     labRequest.tests = updatedTests;
@@ -254,7 +261,7 @@ export const processLabSession = async (req, res, next) => {
           patient_id: labRequest.patient_id?._id || labRequest.patient_id,
           doctor_id: labRequest.doctor_id?._id || labRequest.doctor_id,
           test_name: t.test_name,
-          cost: t.cost || 0,
+          cost: totalCost,
           result: t.result,
           reference_range: t.reference_range || '',
           clinical_interpretation: t.clinical_interpretation || 'Normal',
@@ -267,7 +274,7 @@ export const processLabSession = async (req, res, next) => {
       }
     }
 
-    // Billing & Invoice integration: One bundled or itemized invoice entry for the entire lab request
+    // Billing & Invoice integration: Single one-time testing fee item for the entire lab request
     if (totalCost > 0) {
       let invoice = await Invoice.findOne({ visit_id: labRequest.visit_id });
       if (!invoice) {
@@ -286,30 +293,28 @@ export const processLabSession = async (req, res, next) => {
         });
       }
 
-      // Add each individual test item to invoice
-      for (const t of updatedTests) {
-        if (t.cost > 0) {
-          const existingIndex = invoice.items.findIndex(
-            it => (it.reference_id?.toString() === labRequest._id.toString() && it.description?.includes(t.test_name)) ||
-                  (it.item_type === 'LabTest' && it.description === `Lab Test: ${t.test_name}`)
-          );
+      // Check if Laboratory Testing Fee item already exists
+      const testNamesSummary = updatedTests.map(t => t.test_name).join(', ');
+      const existingIndex = invoice.items.findIndex(
+        it => (it.reference_id?.toString() === labRequest._id.toString()) ||
+              (it.item_type === 'LabTest')
+      );
 
-          if (existingIndex >= 0) {
-            invoice.items[existingIndex].unit_price = t.cost;
-            invoice.items[existingIndex].total_price = t.cost;
-            invoice.items[existingIndex].paid_status = mark_paid ? 'Paid' : 'Unpaid';
-          } else {
-            invoice.items.push({
-              item_type: 'LabTest',
-              reference_id: labRequest._id,
-              description: `Lab Test: ${t.test_name}`,
-              quantity: 1,
-              unit_price: t.cost,
-              total_price: t.cost,
-              paid_status: mark_paid ? 'Paid' : 'Unpaid'
-            });
-          }
-        }
+      if (existingIndex >= 0) {
+        invoice.items[existingIndex].description = `Laboratory Testing Fee (${testNamesSummary})`;
+        invoice.items[existingIndex].unit_price = totalCost;
+        invoice.items[existingIndex].total_price = totalCost;
+        invoice.items[existingIndex].paid_status = mark_paid ? 'Paid' : 'Unpaid';
+      } else {
+        invoice.items.push({
+          item_type: 'LabTest',
+          reference_id: labRequest._id,
+          description: `Laboratory Testing Fee (${testNamesSummary})`,
+          quantity: 1,
+          unit_price: totalCost,
+          total_price: totalCost,
+          paid_status: mark_paid ? 'Paid' : 'Unpaid'
+        });
       }
 
       invoice.subtotal = invoice.items.reduce((acc, item) => acc + item.total_price, 0);
@@ -318,9 +323,8 @@ export const processLabSession = async (req, res, next) => {
       if (mark_paid) {
         invoice.paid_amount = Math.min(invoice.total_amount, (invoice.paid_amount || 0) + totalCost);
         
-        // Single payment receipt for the whole lab request
+        // Single payment receipt for the $3 one-time testing fee
         const receipt_number = await generateReceiptNumber();
-        const testListStr = updatedTests.map(t => `${t.test_name} ($${t.cost})`).join(', ');
         await Payment.create({
           receipt_number,
           invoice_id: invoice._id,
@@ -332,7 +336,7 @@ export const processLabSession = async (req, res, next) => {
           payment_method,
           received_by: req.user._id,
           received_by_name: staffName,
-          notes: `Lab request ${labRequest.request_number} (${updatedTests.length} tests: ${testListStr}) - Total: $${totalCost}`
+          notes: `Lab testing (${updatedTests.length} tests: ${testNamesSummary}) — Flat Fee: $${totalCost.toFixed(2)}`
         });
       }
 

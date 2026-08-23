@@ -29,6 +29,10 @@ const settingSchema = new mongoose.Schema({
     type: Number,
     default: 20
   },
+  default_lab_test_fee: {
+    type: Number,
+    default: 3
+  },
   currency: {
     type: String,
     default: 'USD'
