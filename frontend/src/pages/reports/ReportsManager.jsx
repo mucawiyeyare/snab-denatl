@@ -30,7 +30,8 @@ import {
   Clock,
   ShieldAlert,
   ArrowUpRight,
-  RefreshCw
+  RefreshCw,
+  CreditCard
 } from 'lucide-react';
 
 const safeNum = (val, decimals = 2) => {
