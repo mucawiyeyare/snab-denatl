@@ -1400,8 +1400,9 @@ const VisitList = () => {
               className="w-full p-2.5 bg-white border border-slate-200 rounded-xl font-bold text-slate-900 focus:outline-none focus:border-blue-500 cursor-pointer"
             >
               <option value="Cash">💵 Cash</option>
-              <option value="Mobile Payment">📱 Mobile Payment (EVC Plus / Zaad / Sahal)</option>
-              <option value="Card">💳 Credit / Debit Card (POS)</option>
+              <option value="EVC Plus">📱 EVC Plus</option>
+              <option value="eDahab">📱 eDahab</option>
+              <option value="Card">💳 Card</option>
               <option value="Bank Transfer">🏦 Bank Transfer</option>
             </select>
           </div>

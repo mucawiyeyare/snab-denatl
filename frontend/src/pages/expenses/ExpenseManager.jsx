@@ -45,9 +45,10 @@ const EXPENSE_CATEGORIES = [
 
 const PAYMENT_METHODS = [
   'Cash',
-  'Bank Transfer',
-  'Mobile Payment',
+  'EVC Plus',
+  'eDahab',
   'Card',
+  'Bank Transfer',
   'Cheque',
   'Other'
 ];

@@ -45,7 +45,7 @@ const paymentSchema = new mongoose.Schema({
   },
   payment_method: {
     type: String,
-    enum: ['Cash', 'Card', 'Mobile Payment', 'Bank Transfer', 'Insurance'],
+    enum: ['Cash', 'EVC Plus', 'eDahab', 'Card', 'Bank Transfer', 'Mobile Payment', 'Insurance', 'Other'],
     default: 'Cash'
   },
   transaction_reference: {

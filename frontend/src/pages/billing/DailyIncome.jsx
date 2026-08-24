@@ -255,13 +255,14 @@ const DailyIncome = () => {
             <select
               value={methodFilter}
               onChange={(e) => setMethodFilter(e.target.value)}
-              className="px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700"
+              className="px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 cursor-pointer"
             >
               <option value="">All Methods</option>
-              <option value="Cash">Cash</option>
-              <option value="Card">Card</option>
-              <option value="Mobile Payment">Mobile Payment</option>
-              <option value="Bank Transfer">Bank Transfer</option>
+              <option value="Cash">💵 Cash</option>
+              <option value="EVC Plus">📱 EVC Plus</option>
+              <option value="eDahab">📱 eDahab</option>
+              <option value="Card">💳 Card</option>
+              <option value="Bank Transfer">🏦 Bank Transfer</option>
             </select>
 
             {/* Search Input */}

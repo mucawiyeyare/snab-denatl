@@ -257,18 +257,26 @@ export const getDailyCashierSummary = async (req, res, next) => {
     const endToday = new Date();
     endToday.setHours(23, 59, 59, 999);
 
-    const payments = await Payment.find({
-      payment_date: { $gte: today, $lte: endToday }
-    }).populate('received_by', 'full_name username');
+    const [payments, dayInvoices] = await Promise.all([
+      Payment.find({
+        payment_date: { $gte: today, $lte: endToday }
+      }).populate('received_by', 'full_name username'),
+      Invoice.find({
+        createdAt: { $gte: today, $lte: endToday }
+      })
+    ]);
 
-    const totalCollected = payments.reduce((acc, p) => acc + p.amount, 0);
+    const totalCollected = payments.reduce((acc, p) => acc + (Number(p.amount) || 0), 0);
+    const todayBilled = dayInvoices.reduce((acc, inv) => acc + (Number(inv.total_amount) || 0), 0);
+    const todayPending = dayInvoices.reduce((acc, inv) => acc + (Number(inv.balance) || 0), 0);
 
     const byMethod = {
       Cash: 0,
+      'EVC Plus': 0,
+      'eDahab': 0,
       Card: 0,
-      'Mobile Payment': 0,
       'Bank Transfer': 0,
-      Insurance: 0
+      'Mobile Payment': 0
     };
 
     const byCategory = {
@@ -280,8 +288,10 @@ export const getDailyCashierSummary = async (req, res, next) => {
     };
 
     payments.forEach(p => {
-      if (byMethod[p.payment_method] !== undefined) byMethod[p.payment_method] += p.amount;
-      if (byCategory[p.payment_category] !== undefined) byCategory[p.payment_category] += p.amount;
+      const amt = Number(p.amount) || 0;
+      const m = p.payment_method || 'Cash';
+      byMethod[m] = (byMethod[m] || 0) + amt;
+      if (byCategory[p.payment_category] !== undefined) byCategory[p.payment_category] += amt;
     });
 
     res.json({
@@ -289,7 +299,10 @@ export const getDailyCashierSummary = async (req, res, next) => {
       data: {
         date: today,
         transactionCount: payments.length,
-        totalCollected,
+        todayBilled: Number(todayBilled.toFixed(2)),
+        todayCollected: Number(totalCollected.toFixed(2)),
+        todayPending: Number(todayPending.toFixed(2)),
+        totalCollected: Number(totalCollected.toFixed(2)),
         byMethod,
         byCategory,
         transactions: payments

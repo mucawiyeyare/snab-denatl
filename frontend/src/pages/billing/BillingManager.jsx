@@ -795,11 +795,12 @@ const BillingManager = () => {
             <select
               value={paymentMethod}
               onChange={(e) => setPaymentMethod(e.target.value)}
-              className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800 focus:bg-white"
+              className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold text-slate-800 focus:bg-white cursor-pointer"
             >
               <option value="Cash">💵 Cash</option>
-              <option value="Card">💳 Credit / Debit Card</option>
-              <option value="Mobile Payment">📱 Mobile Payment (EVC Plus / Zaad)</option>
+              <option value="EVC Plus">📱 EVC Plus</option>
+              <option value="eDahab">📱 eDahab</option>
+              <option value="Card">💳 Card</option>
               <option value="Bank Transfer">🏦 Bank Transfer</option>
             </select>
           </div>
