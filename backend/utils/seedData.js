@@ -139,9 +139,17 @@ const seedAll = async () => {
     ];
 
     for (const u of usersData) {
-      await User.findOneAndUpdate({ username: u.username }, u, { upsert: true, returnDocument: 'after' });
+      const existingUser = await User.findOne({ username: u.username });
+      if (!existingUser) {
+        await User.create(u);
+      } else {
+        if (!existingUser.full_name) existingUser.full_name = u.full_name;
+        if (!existingUser.role) existingUser.role = u.role;
+        if (!existingUser.employee_id && u.employee_id) existingUser.employee_id = u.employee_id;
+        await existingUser.save();
+      }
     }
-    console.log('[Seed] Users created/updated.');
+    console.log('[Seed] Users verified/preserved.');
 
     // 4. Dental Services Catalog (all 25 items from spec)
     const dentalServicesData = [

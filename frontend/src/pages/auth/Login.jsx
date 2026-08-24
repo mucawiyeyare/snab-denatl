@@ -111,6 +111,20 @@ const Login = () => {
           </button>
         </form>
 
+        {/* Footer */}
+        <div className="pt-2 text-center border-t border-slate-100 text-[11px] text-slate-500 font-medium">
+          <span>Developed by </span>
+          <a
+            href="https://iftiinhub.com"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-bold text-blue-600 hover:text-blue-700 hover:underline transition inline-flex items-center gap-1 cursor-pointer"
+          >
+            <span>IFtiinhubict 2026</span>
+            <span className="text-[10px]">↗</span>
+          </a>
+        </div>
+
       </div>
     </div>
   );

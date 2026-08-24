@@ -27,8 +27,29 @@ const Layout = () => {
         />
         
         {/* Main page content area */}
-        <main className="flex-1 overflow-y-auto p-3 sm:p-4 lg:p-6 pb-16 sm:pb-6">
-          <Outlet />
+        <main className="flex-1 overflow-y-auto p-3 sm:p-4 lg:p-6 pb-20 sm:pb-8 flex flex-col justify-between">
+          <div className="flex-1">
+            <Outlet />
+          </div>
+
+          {/* Clinic & Developer Footer */}
+          <footer className="mt-8 pt-4 border-t border-slate-200/80 flex flex-col sm:flex-row items-center justify-between gap-2 text-[11px] text-slate-500 font-medium shrink-0">
+            <div className="flex items-center gap-1.5 text-center sm:text-left">
+              <span>© {new Date().getFullYear()} SNAB Dental & Dermatologic Clinic MS. All rights reserved.</span>
+            </div>
+            <div className="text-center sm:text-right">
+              Developed by{' '}
+              <a
+                href="https://iftiinhub.com"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="font-bold text-blue-600 hover:text-blue-700 hover:underline transition inline-flex items-center gap-1 cursor-pointer"
+              >
+                <span>IFtiinhubict 2026</span>
+                <span className="text-[10px]">↗</span>
+              </a>
+            </div>
+          </footer>
         </main>
 
         {/* Mobile Bottom Quick Navigation Bar */}

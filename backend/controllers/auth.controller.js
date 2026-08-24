@@ -104,11 +104,12 @@ export const login = async (req, res, next) => {
       token,
       user: {
         id: user._id,
+        _id: user._id,
         username: user.username,
         full_name: user.full_name,
         role: user.role,
         email: user.email,
-        profile_image: user.profile_image,
+        profile_image: user.profile_image || '',
         employee: user.employee_id
       }
     });
