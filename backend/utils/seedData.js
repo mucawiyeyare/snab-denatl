@@ -15,6 +15,7 @@ import Invoice from '../models/Invoice.js';
 import Payment from '../models/Payment.js';
 import DentalInventory from '../models/DentalInventory.js';
 import Medicine from '../models/Medicine.js';
+import Expense from '../models/Expense.js';
 import AuditLog from '../models/AuditLog.js';
 
 dotenv.config();
@@ -430,6 +431,86 @@ const seedAll = async () => {
       await DentalInventory.findOneAndUpdate({ item_code: item.item_code }, item, { upsert: true, returnDocument: 'after' });
     }
     console.log('[Seed] Dental Inventory created/updated.');
+
+    // 8. Dental Service and Clinic Operational Expenses
+    const adminUser = await User.findOne({ role: 'Admin' });
+    const expensesData = [
+      {
+        expense_code: 'EXP-2026-00001',
+        title: 'Dental Composite Filling Materials & Etchant Kit',
+        category: 'Dental Materials',
+        amount: 320,
+        expense_date: new Date('2026-08-01'),
+        payment_method: 'Bank Transfer',
+        supplier: '3M ESPE Dental Supplies',
+        receipt_number: 'REC-3M-9021',
+        notes: 'Nano-hybrid composite syringes and universal bonding agents'
+      },
+      {
+        expense_code: 'EXP-2026-00002',
+        title: 'Porcelain & Zirconia Crown Fabrication Fee',
+        category: 'Laboratory Expenses',
+        amount: 240,
+        expense_date: new Date('2026-08-05'),
+        payment_method: 'Cash',
+        supplier: 'Somalia Dental Precision Lab',
+        receipt_number: 'LAB-INV-4412',
+        notes: '3 units Zirconia anterior crowns for patient restoration'
+      },
+      {
+        expense_code: 'EXP-2026-00003',
+        title: 'Autoclave Sterilizer Preventive Service & Spores Test',
+        category: 'Equipment Maintenance',
+        amount: 150,
+        expense_date: new Date('2026-08-10'),
+        payment_method: 'Mobile Payment',
+        supplier: 'MedTech Biomedical Solutions',
+        receipt_number: 'SRV-AUT-081',
+        notes: 'Quarterly pressure calibration and safety biological indicators'
+      },
+      {
+        expense_code: 'EXP-2026-00004',
+        title: 'Dental Nitrile Gloves, Masks, and Sterilization Pouches',
+        category: 'Dental Supplies',
+        amount: 180,
+        expense_date: new Date('2026-08-15'),
+        payment_method: 'Cash',
+        supplier: 'Al-Baraka Medical Supplies',
+        receipt_number: 'ALB-9831',
+        notes: 'Infection control disposables'
+      },
+      {
+        expense_code: 'EXP-2026-00005',
+        title: 'High-Speed Dental Handpiece & Diamond Burs Set',
+        category: 'Dental Instruments',
+        amount: 290,
+        expense_date: new Date('2026-08-18'),
+        payment_method: 'Bank Transfer',
+        supplier: 'NSK Dental Instruments',
+        receipt_number: 'NSK-SO-1092',
+        notes: 'Turbine handpieces and cavity preparation bur kits'
+      },
+      {
+        expense_code: 'EXP-2026-00006',
+        title: 'Clinic High-Speed Fiber Internet & Utilities',
+        category: 'Clinic Operating Expenses',
+        amount: 120,
+        expense_date: new Date('2026-08-20'),
+        payment_method: 'Mobile Payment',
+        supplier: 'Hormuud Telecom Somalia',
+        receipt_number: 'HRM-BILL-8821',
+        notes: 'Monthly clinic fiber connection & utility power'
+      }
+    ];
+
+    for (const exp of expensesData) {
+      await Expense.findOneAndUpdate(
+        { expense_code: exp.expense_code },
+        { ...exp, recorded_by: adminUser?._id },
+        { upsert: true, returnDocument: 'after' }
+      );
+    }
+    console.log('[Seed] Dental Expenses created/updated.');
 
     console.log('\n======================================================');
     console.log('  SNAB DENTAL AND DERMATOLOGIC CLINIC - SEEDED!  ');

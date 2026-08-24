@@ -23,7 +23,10 @@ import {
   Contact,
   FileText,
   User,
-  UserCheck
+  UserCheck,
+  DollarSign,
+  TrendingDown,
+  Wallet
 } from 'lucide-react';
 
 const Sidebar = ({ isOpen, onClose, onOpenProfile }) => {
@@ -35,16 +38,15 @@ const Sidebar = ({ isOpen, onClose, onOpenProfile }) => {
     if (role === 'Doctor') {
       return [
         { label: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
-        { label: 'My Patient Queue', path: '/visits', icon: Activity },
         { label: 'Patients & History', path: '/patients', icon: Users },
-        { label: 'Doctors', path: '/doctors', icon: UserCheck },
+        { label: 'Appointments', path: '/appointments', icon: Calendar },
+        { label: 'Visits & Queue', path: '/visits', icon: Activity },
         { label: 'Doctor Consultations', path: '/consultations', icon: Stethoscope },
         { label: 'Dental Treatments', path: '/treatments', icon: HeartPulse },
+        { label: 'Dental Services', path: '/services', icon: Sparkles },
         { label: 'Pharmacy & Medicines', path: '/pharmacy', icon: Pill },
-        { label: 'Dental Services Catalog', path: '/services', icon: Sparkles },
+        { label: 'Laboratory', path: '/lab', icon: TestTube2 },
         { label: 'Dental Inventory', path: '/inventory', icon: Boxes },
-        { label: 'Laboratory Sessions', path: '/lab', icon: TestTube2 },
-        { label: 'Appointments', path: '/appointments', icon: Calendar },
         { label: 'Reports & Analytics', path: '/reports', icon: FileBarChart },
         { label: 'Settings', path: '/settings', icon: Settings }
       ];
@@ -54,13 +56,15 @@ const Sidebar = ({ isOpen, onClose, onOpenProfile }) => {
       return [
         { label: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
         { label: 'Patients & History', path: '/patients', icon: Users },
-        { label: 'Visits & Patient Flow', path: '/visits', icon: Activity },
-        { label: 'Doctors', path: '/doctors', icon: UserCheck },
         { label: 'Appointments', path: '/appointments', icon: Calendar },
-        { label: 'Pharmacy & Medicines', path: '/pharmacy', icon: Pill },
-        { label: 'Laboratory Sessions', path: '/lab', icon: TestTube2 },
+        { label: 'Visits & Patient Flow', path: '/visits', icon: Activity },
+        { label: 'Dental Services', path: '/services', icon: Sparkles },
         { label: 'Billing & Invoices', path: '/billing', icon: CreditCard },
+        { label: 'Daily Income', path: '/daily-income', icon: DollarSign },
+        { label: 'Expenses', path: '/expenses', icon: TrendingDown },
         { label: 'Cashier & Receipts', path: '/payments', icon: Receipt },
+        { label: 'Pharmacy & Medicines', path: '/pharmacy', icon: Pill },
+        { label: 'Laboratory', path: '/lab', icon: TestTube2 },
         { label: 'Reports & Analytics', path: '/reports', icon: FileBarChart }
       ];
     }
@@ -69,17 +73,18 @@ const Sidebar = ({ isOpen, onClose, onOpenProfile }) => {
     return [
       { label: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
       { label: 'Patients & History', path: '/patients', icon: Users },
-      { label: 'Visits & Patient Flow', path: '/visits', icon: Activity },
-      { label: 'Doctors', path: '/doctors', icon: UserCheck },
       { label: 'Appointments', path: '/appointments', icon: Calendar },
+      { label: 'Visits & Queue', path: '/visits', icon: Activity },
       { label: 'Doctor Consultations', path: '/consultations', icon: Stethoscope },
       { label: 'Dental Treatments', path: '/treatments', icon: HeartPulse },
-      { label: 'Pharmacy & Medicines', path: '/pharmacy', icon: Pill },
       { label: 'Dental Services', path: '/services', icon: Sparkles },
-      { label: 'Dental Inventory', path: '/inventory', icon: Boxes },
-      { label: 'Laboratory Sessions', path: '/lab', icon: TestTube2 },
       { label: 'Billing & Invoices', path: '/billing', icon: CreditCard },
-      { label: 'Cashier & Receipts', path: '/payments', icon: Receipt },
+      { label: 'Daily Income', path: '/daily-income', icon: DollarSign },
+      { label: 'Clinic Expenses', path: '/expenses', icon: TrendingDown },
+      { label: 'Pharmacy & Medicines', path: '/pharmacy', icon: Pill },
+      { label: 'Laboratory', path: '/lab', icon: TestTube2 },
+      { label: 'Dental Inventory', path: '/inventory', icon: Boxes },
+      { label: 'Doctors', path: '/doctors', icon: UserCheck },
       { label: 'Staff Directory', path: '/employees', icon: Contact },
       { label: 'Users & Roles', path: '/users', icon: ShieldCheck },
       { label: 'Audit Logs', path: '/audit-logs', icon: FileText },

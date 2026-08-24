@@ -1,44 +1,69 @@
 import React, { useState, useEffect } from 'react';
-import { getDashboardStatsApi, getDoctorPerformanceReportApi, getServiceAnalyticsApi } from '../../api/endpoints.js';
+import {
+  getDashboardStatsApi,
+  getFinancialSummaryApi,
+  getTreatmentAnalyticsApi,
+  getMedicationReportApi,
+  getDoctorPerformanceReportApi
+} from '../../api/endpoints.js';
 import {
   FileBarChart,
   DollarSign,
-  Users,
-  Award,
   TrendingUp,
-  TestTube2,
-  Printer,
+  TrendingDown,
+  Users,
   Calendar,
   Filter,
-  CheckCircle2,
+  Printer,
+  Download,
+  Stethoscope,
+  HeartPulse,
+  Pill,
   PieChart,
   BarChart3,
-  Stethoscope,
-  Activity
+  Award,
+  Sparkles,
+  CheckCircle,
+  Activity,
+  Layers,
+  Percent,
+  Clock,
+  ShieldAlert,
+  ArrowUpRight
 } from 'lucide-react';
 
 const ReportsManager = () => {
-  const [stats, setStats] = useState(null);
-  const [doctorPerformance, setDoctorPerformance] = useState([]);
-  const [analytics, setAnalytics] = useState(null);
+  const [activeTab, setActiveTab] = useState('monthly'); // 'monthly' | 'yearly' | 'executive' | 'treatments' | 'medications'
+  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [loading, setLoading] = useState(true);
-  const [timeFilter, setTimeFilter] = useState('month'); // 'week' | 'month' | 'year'
+
+  // Data states
+  const [financialData, setFinancialData] = useState(null);
+  const [treatmentData, setTreatmentData] = useState(null);
+  const [medicationData, setMedicationData] = useState(null);
+  const [statsData, setStatsData] = useState(null);
+  const [doctorPerformance, setDoctorPerformance] = useState([]);
 
   useEffect(() => {
-    fetchReportData();
-  }, []);
+    fetchReports();
+  }, [selectedYear]);
 
-  const fetchReportData = async () => {
+  const fetchReports = async () => {
     setLoading(true);
     try {
-      const [statsRes, docRes, analyticsRes] = await Promise.all([
+      const [finRes, treatRes, medRes, statsRes, docRes] = await Promise.all([
+        getFinancialSummaryApi({ year: selectedYear }).catch(() => ({ data: { data: null } })),
+        getTreatmentAnalyticsApi().catch(() => ({ data: { data: null } })),
+        getMedicationReportApi().catch(() => ({ data: { data: null } })),
         getDashboardStatsApi().catch(() => ({ data: { data: null } })),
-        getDoctorPerformanceReportApi().catch(() => ({ data: { data: [] } })),
-        getServiceAnalyticsApi().catch(() => ({ data: { data: null } }))
+        getDoctorPerformanceReportApi().catch(() => ({ data: { data: [] } }))
       ]);
-      setStats(statsRes.data?.data);
+
+      setFinancialData(finRes.data?.data || null);
+      setTreatmentData(treatRes.data?.data || null);
+      setMedicationData(medRes.data?.data || null);
+      setStatsData(statsRes.data?.data || null);
       setDoctorPerformance(docRes.data?.data || []);
-      setAnalytics(analyticsRes.data?.data);
     } catch (err) {
       console.error('Error fetching reports:', err);
     } finally {
@@ -50,406 +75,573 @@ const ReportsManager = () => {
     window.print();
   };
 
-  // Monthly Revenue Data (100% Real Live Aggregated Data from MongoDB)
-  const monthlyRevenueData = React.useMemo(() => {
-    const list = [];
-    const today = new Date();
-    for (let i = 5; i >= 0; i--) {
-      const d = new Date(today.getFullYear(), today.getMonth() - i, 1);
-      const monthKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-      const monthShort = d.toLocaleDateString('en-US', { month: 'short' });
-      const matched = (stats?.monthlyRevenue || []).find(m => m._id === monthKey);
-      list.push({
-        month: monthShort,
-        revenue: matched ? matched.total : 0,
-        visits: matched ? matched.count : 0
-      });
-    }
-    return list;
-  }, [stats?.monthlyRevenue]);
+  const summary = financialData?.summary || {
+    gross_revenue: 0,
+    collected_revenue: 0,
+    outstanding_revenue: 0,
+    total_expenses: 0,
+    net_income: 0,
+    total_discounts: 0,
+    total_refunds: 0,
+    total_invoices: 0,
+    total_patients: 0,
+    yoy_growth: 0
+  };
 
-  const maxRevenue = Math.max(...monthlyRevenueData.map(d => d.revenue), 100);
-
-  // Real Payment Categories Breakdown
-  const paymentCats = analytics?.paymentCategories || [];
-  const totalCatRevenue = paymentCats.reduce((sum, c) => sum + (c.total || 0), 0) || 1;
-
-  // Real Top Dental Procedures
-  const realTopServices = analytics?.topServices || [];
-  const maxSrvCount = Math.max(...realTopServices.map(s => s.count || 0), 1);
-
-  // Real Top Diagnostic Lab Tests
-  const realTopLabs = analytics?.topLabTests || [];
-  const maxLabCount = Math.max(...realTopLabs.map(l => l.count || 0), 1);
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
-      </div>
-    );
-  }
+  const monthlyList = financialData?.monthly_breakdown || [];
+  const maxMonthVal = Math.max(...monthlyList.map(m => Math.max(m.collected_revenue, m.total_expenses)), 100);
 
   return (
     <div className="space-y-6">
       
-      {/* Header with Title and Actions */}
+      {/* ── Top Header & Global Actions ── */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 no-print">
         <div>
-          <h1 className="text-2xl font-black text-slate-900 tracking-tight">Clinic Reports & Analytics Dashboard</h1>
-          <p className="text-xs text-slate-500">Live financial metrics, procedure trends, and clinical performance verified from database</p>
+          <h1 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight flex items-center gap-2.5">
+            <FileBarChart className="w-7 h-7 text-blue-600" />
+            <span>Clinic Financial & Dental Reports</span>
+          </h1>
+          <p className="text-xs sm:text-sm text-slate-500 font-medium mt-0.5">
+            Net income analysis, 12-month Jan-Dec revenue, treatment volume, medication expenses, and audit metrics
+          </p>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2.5 w-full sm:w-auto">
+          {/* Year Picker */}
+          <div className="flex items-center gap-2 bg-white px-3 py-1.5 rounded-xl border border-slate-200 shadow-2xs">
+            <Calendar className="w-4 h-4 text-slate-400" />
+            <select
+              value={selectedYear}
+              onChange={(e) => setSelectedYear(parseInt(e.target.value, 10))}
+              className="text-xs font-bold text-slate-800 bg-transparent outline-none cursor-pointer"
+            >
+              <option value="2026">Financial Year 2026</option>
+              <option value="2025">Financial Year 2025</option>
+              <option value="2024">Financial Year 2024</option>
+            </select>
+          </div>
+
           <button
             onClick={handlePrint}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl shadow-md transition cursor-pointer"
+            className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 active:scale-95 text-white font-bold text-xs rounded-xl shadow-md shadow-blue-500/20 transition cursor-pointer"
           >
             <Printer className="w-4 h-4" />
-            Print Report
+            <span>Print Report</span>
           </button>
         </div>
       </div>
 
-      <div id="printable-area" className="space-y-6">
+      {/* ── Printable Report Header ── */}
+      <div className="hidden print:block text-center pb-4 border-b-2 border-slate-900 mb-6 space-y-1">
+        <h2 className="text-xl font-black uppercase text-slate-900">SNAB DENTAL & DERMATOLOGIC CLINIC</h2>
+        <p className="text-xs font-bold text-slate-600 uppercase">Executive Financial & Clinical Analytics Report ({selectedYear})</p>
+        <p className="text-[10px] font-mono text-slate-400">Generated on: {new Date().toLocaleString()} • Net Income = Collected Revenue - Total Expenses</p>
+      </div>
+
+      {/* ── Executive Net Income Scorecard (Consistent Formula) ── */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3.5">
         
-        {/* 1. Top KPI Overview Cards (100% Real Live Database Data) */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          
-          <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-xs space-y-1">
-            <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Today's Revenue</span>
-            <p className="text-2xl font-black text-emerald-600">${(stats?.financials?.todayRevenue || 0).toFixed(2)}</p>
-            <div className="flex items-center gap-1 text-[11px] text-emerald-600 font-semibold pt-1">
-              <TrendingUp className="w-3.5 h-3.5" />
-              <span>Collected today</span>
-            </div>
-          </div>
-
-          <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-xs space-y-1">
-            <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">This Month Revenue</span>
-            <p className="text-2xl font-black text-blue-600">${(stats?.financials?.monthRevenue || 0).toFixed(2)}</p>
-            <div className="flex items-center gap-1 text-[11px] text-blue-600 font-semibold pt-1">
-              <TrendingUp className="w-3.5 h-3.5" />
-              <span>Total: ${(stats?.financials?.totalRevenue || 0).toFixed(2)}</span>
-            </div>
-          </div>
-
-          <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-xs space-y-1">
-            <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Outstanding Invoices</span>
-            <p className="text-2xl font-black text-rose-600">${(stats?.financials?.totalOutstanding || 0).toFixed(2)}</p>
-            <span className="text-[11px] text-slate-400 font-medium block pt-1">
-              {stats?.financials?.unpaidInvoicesCount || 0} unpaid balances
-            </span>
-          </div>
-
-          <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-xs space-y-1">
-            <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Total Patients</span>
-            <p className="text-2xl font-black text-slate-900">{stats?.patients?.total || 0}</p>
-            <span className="text-[11px] text-slate-400 font-medium block pt-1">
-              {stats?.patients?.month || 0} new registered this month
-            </span>
-          </div>
-
+        {/* Net Income */}
+        <div className="p-5 bg-gradient-to-br from-blue-600 to-indigo-800 text-white rounded-3xl shadow-md space-y-1 col-span-2 sm:col-span-1">
+          <span className="text-[10px] font-bold text-blue-100 uppercase tracking-wider">NET CLINIC INCOME</span>
+          <p className="text-2xl sm:text-3xl font-black font-mono">${summary.net_income.toFixed(2)}</p>
+          <span className="text-[10px] text-blue-100 block">
+            Collected (${summary.collected_revenue.toFixed(0)}) − Expenses (${summary.total_expenses.toFixed(0)})
+          </span>
         </div>
 
-        {/* 2. Charts Row: Revenue Growth Chart + Revenue Source Donut */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          
-          {/* 6-Month Revenue Trend Bar Chart (2 cols) */}
-          <div className="lg:col-span-2 bg-white p-6 sm:p-7 rounded-3xl border border-slate-100 shadow-xs space-y-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="flex items-center gap-2">
-                  <BarChart3 className="w-5 h-5 text-blue-600" />
-                  <h3 className="text-base font-bold text-slate-900">Monthly Revenue Trend (Last 6 Months)</h3>
-                </div>
-                <p className="text-xs text-slate-400 mt-0.5">Historical financial trajectory computed directly from collected payments</p>
-              </div>
-              <span className="text-xs font-bold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-lg">
-                Live Data
-              </span>
-            </div>
-
-            {/* SVG Visual Bar Trend */}
-            <div className="pt-6">
-              <div className="relative h-56 w-full">
-                <svg className="w-full h-full overflow-visible" viewBox="0 0 600 200">
-                  <defs>
-                    <linearGradient id="barBlueGradient" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="#3b82f6" />
-                      <stop offset="100%" stopColor="#1d4ed8" />
-                    </linearGradient>
-                  </defs>
-
-                  {/* Horizontal Grid lines */}
-                  <line x1="50" y1="20" x2="580" y2="20" stroke="#f1f5f9" strokeDasharray="3 3" />
-                  <line x1="50" y1="65" x2="580" y2="65" stroke="#f1f5f9" strokeDasharray="3 3" />
-                  <line x1="50" y1="110" x2="580" y2="110" stroke="#f1f5f9" strokeDasharray="3 3" />
-                  <line x1="50" y1="155" x2="580" y2="155" stroke="#f1f5f9" strokeDasharray="3 3" />
-                  <line x1="50" y1="195" x2="580" y2="195" stroke="#cbd5e1" strokeWidth="1.5" />
-
-                  {/* Y-axis Labels */}
-                  <text x="10" y="24" className="text-[10px] fill-slate-400 font-mono font-bold">${Math.round(maxRevenue)}</text>
-                  <text x="10" y="69" className="text-[10px] fill-slate-400 font-mono font-bold">${Math.round(maxRevenue * 0.75)}</text>
-                  <text x="10" y="114" className="text-[10px] fill-slate-400 font-mono font-bold">${Math.round(maxRevenue * 0.5)}</text>
-                  <text x="10" y="159" className="text-[10px] fill-slate-400 font-mono font-bold">${Math.round(maxRevenue * 0.25)}</text>
-                  <text x="25" y="198" className="text-[10px] fill-slate-400 font-mono font-bold">$0</text>
-
-                  {/* Monthly Bars */}
-                  {monthlyRevenueData.map((d, idx) => {
-                    const barX = 75 + idx * 85;
-                    const barHeight = d.revenue > 0 ? (d.revenue / maxRevenue) * 160 : 4;
-                    const barY = 195 - barHeight;
-                    return (
-                      <g key={idx} className="transition-all hover:opacity-80 cursor-pointer">
-                        {/* Bar */}
-                        <rect
-                          x={barX}
-                          y={barY}
-                          width="38"
-                          height={barHeight}
-                          rx="6"
-                          fill="url(#barBlueGradient)"
-                        />
-                        {/* Amount text above bar */}
-                        <text
-                          x={barX + 19}
-                          y={barY - 6}
-                          textAnchor="middle"
-                          className="text-[10px] fill-slate-800 font-bold font-mono"
-                        >
-                          ${d.revenue.toFixed(0)}
-                        </text>
-                        {/* Month label under bar */}
-                        <text
-                          x={barX + 19}
-                          y="215"
-                          textAnchor="middle"
-                          className="text-[11px] fill-slate-500 font-bold"
-                        >
-                          {d.month}
-                        </text>
-                      </g>
-                    );
-                  })}
-                </svg>
-              </div>
-            </div>
-
-            <div className="flex items-center justify-center gap-6 pt-6 border-t border-slate-50 text-xs">
-              <div className="flex items-center gap-2">
-                <span className="w-3 h-3 rounded-md bg-blue-600"></span>
-                <span className="text-slate-600 font-medium">Billed & Collected Revenue</span>
-              </div>
-            </div>
+        {/* Collected Revenue */}
+        <div className="p-5 bg-white border border-slate-100 rounded-3xl shadow-2xs space-y-1">
+          <div className="flex justify-between items-center text-slate-400">
+            <span className="text-[10px] font-bold uppercase tracking-wider">Collected Revenue</span>
+            <DollarSign className="w-4 h-4 text-emerald-600" />
           </div>
-
-          {/* Revenue Distribution Donut Chart (1 col) */}
-          <div className="bg-white p-6 sm:p-7 rounded-3xl border border-slate-100 shadow-xs space-y-4 flex flex-col justify-between">
-            <div>
-              <div className="flex items-center gap-2">
-                <PieChart className="w-5 h-5 text-blue-600" />
-                <h3 className="text-base font-bold text-slate-900">Revenue Distribution</h3>
-              </div>
-              <p className="text-xs text-slate-400 mt-0.5">Live contribution by payment category</p>
-            </div>
-
-            {/* Circular Donut Diagram */}
-            <div className="flex items-center justify-center py-2">
-              <div className="relative w-44 h-44 flex items-center justify-center">
-                <svg className="w-full h-full -rotate-90" viewBox="0 0 36 36">
-                  <circle cx="18" cy="18" r="14" fill="none" stroke="#f1f5f9" strokeWidth="4.5" />
-                  {paymentCats.map((cat, idx) => {
-                    const pct = Math.round((cat.total / totalCatRevenue) * 100) || 0;
-                    const colors = ['#2563eb', '#06b6d4', '#f59e0b', '#10b981', '#8b5cf6'];
-                    const color = colors[idx % colors.length];
-                    const offset = paymentCats.slice(0, idx).reduce((acc, c) => acc + Math.round((c.total / totalCatRevenue) * 100), 0);
-                    return (
-                      <circle
-                        key={idx}
-                        cx="18"
-                        cy="18"
-                        r="14"
-                        fill="none"
-                        stroke={color}
-                        strokeWidth="4.5"
-                        strokeDasharray={`${pct * 0.88} 100`}
-                        strokeDashoffset={`-${offset * 0.88}`}
-                        strokeLinecap="round"
-                      />
-                    );
-                  })}
-                </svg>
-                <div className="absolute text-center">
-                  <span className="text-xl font-black text-slate-900 block font-mono">${(stats?.financials?.totalRevenue || 0).toFixed(0)}</span>
-                  <span className="text-[10px] font-bold text-slate-400 uppercase">Collected</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Category Legend */}
-            <div className="space-y-2 text-xs font-semibold pt-2 border-t border-slate-50">
-              {paymentCats.length === 0 ? (
-                <p className="text-slate-400 text-center text-[11px] py-2">No payments collected yet.</p>
-              ) : (
-                paymentCats.map((cat, idx) => {
-                  const colors = ['bg-blue-600', 'bg-cyan-500', 'bg-amber-500', 'bg-emerald-500', 'bg-purple-500'];
-                  const pct = Math.round((cat.total / totalCatRevenue) * 100) || 0;
-                  return (
-                    <div key={idx} className="flex justify-between items-center">
-                      <div className="flex items-center gap-2">
-                        <span className={`w-2.5 h-2.5 rounded-full ${colors[idx % colors.length]}`}></span>
-                        <span className="text-slate-700">{cat._id || 'General Payment'}</span>
-                      </div>
-                      <span className="font-bold text-slate-900 font-mono">{pct}% (${cat.total.toFixed(2)})</span>
-                    </div>
-                  );
-                })
-              )}
-            </div>
-          </div>
-
+          <p className="text-2xl font-black text-emerald-600 font-mono">${summary.collected_revenue.toFixed(2)}</p>
+          <span className="text-[10px] text-slate-400">Gross Invoiced: ${summary.gross_revenue.toFixed(2)}</span>
         </div>
 
-        {/* 3. Doctor Performance & Productivity Comparison */}
-        <div className="bg-white p-6 sm:p-7 rounded-3xl border border-slate-100 shadow-xs space-y-5">
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
-            <div>
-              <div className="flex items-center gap-2">
-                <Stethoscope className="w-5 h-5 text-blue-600" />
-                <h3 className="text-base font-bold text-slate-900">Clinician Productivity & Performance</h3>
-              </div>
-              <p className="text-xs text-slate-400">Live consultations completed, procedures performed, and revenue generated by doctor</p>
-            </div>
+        {/* Total Expenses */}
+        <div className="p-5 bg-white border border-slate-100 rounded-3xl shadow-2xs space-y-1">
+          <div className="flex justify-between items-center text-slate-400">
+            <span className="text-[10px] font-bold uppercase tracking-wider">Total Expenses</span>
+            <TrendingDown className="w-4 h-4 text-rose-600" />
           </div>
+          <p className="text-2xl font-black text-rose-600 font-mono">${summary.total_expenses.toFixed(2)}</p>
+          <span className="text-[10px] text-slate-400">Materials, Labs, Operating</span>
+        </div>
 
-          {doctorPerformance.length === 0 ? (
-            <div className="text-center py-10 text-slate-400 text-xs">
-              <Stethoscope className="w-8 h-8 text-slate-300 mx-auto mb-2" />
-              <p>No doctor clinical records found.</p>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {doctorPerformance.map((doc, idx) => {
-                const totalDocRev = stats?.financials?.totalRevenue || 1;
-                const share = Math.min(Math.round((doc.treatmentRevenue / totalDocRev) * 100), 100) || 0;
-                return (
-                  <div key={doc.doctorId || idx} className="p-5 rounded-2xl bg-slate-50/80 border border-slate-100 space-y-3">
-                    <div className="flex justify-between items-start">
-                      <div>
-                        <h4 className="font-bold text-slate-900 text-sm">Dr. {doc.name}</h4>
-                        <span className="text-xs text-blue-600 font-semibold">{doc.specialization}</span>
-                      </div>
-                      <span className="font-mono text-base font-black text-slate-900">
-                        ${doc.treatmentRevenue.toFixed(2)}
-                      </span>
-                    </div>
+        {/* Outstanding Balances */}
+        <div className="p-5 bg-white border border-slate-100 rounded-3xl shadow-2xs space-y-1">
+          <div className="flex justify-between items-center text-slate-400">
+            <span className="text-[10px] font-bold uppercase tracking-wider">Outstanding Balances</span>
+            <Clock className="w-4 h-4 text-amber-600" />
+          </div>
+          <p className="text-2xl font-black text-amber-600 font-mono">${summary.outstanding_revenue.toFixed(2)}</p>
+          <span className="text-[10px] text-slate-400">Uncollected Patient Dues</span>
+        </div>
 
-                    {/* Horizontal Bar */}
-                    <div className="space-y-1">
-                      <div className="flex justify-between text-[11px] text-slate-500 font-medium">
-                        <span>Procedures: {doc.proceduresCount} • Patients: {doc.patientsSeen}</span>
-                        <span className="font-bold text-slate-700">{share}% of total clinic revenue</span>
-                      </div>
-                      <div className="w-full bg-slate-200 h-2 rounded-full overflow-hidden">
-                        <div
-                          className="bg-blue-600 h-full rounded-full transition-all duration-500"
-                          style={{ width: `${Math.max(share, 5)}%` }}
-                        ></div>
-                      </div>
-                    </div>
+      </div>
 
-                    <div className="flex items-center justify-between text-[11px] text-slate-500 pt-1 border-t border-slate-200/50">
-                      <span>Lab Orders Placed: {doc.labRequestsCount}</span>
-                      <span className="text-emerald-700 font-bold">Active & Verified</span>
-                    </div>
+      {/* ── Multi-Tab Navigation Bar ── */}
+      <div className="bg-white p-4 sm:p-5 rounded-3xl border border-slate-100 shadow-2xs space-y-6">
+        
+        {/* Tabs */}
+        <div className="flex flex-wrap items-center gap-1.5 p-1 bg-slate-100 rounded-2xl no-print">
+          <button
+            onClick={() => setActiveTab('monthly')}
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-1.5 ${
+              activeTab === 'monthly' ? 'bg-white text-blue-700 shadow-2xs' : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            <BarChart3 className="w-3.5 h-3.5" />
+            <span>Monthly Income</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('yearly')}
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-1.5 ${
+              activeTab === 'yearly' ? 'bg-white text-indigo-700 shadow-2xs' : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            <Calendar className="w-3.5 h-3.5" />
+            <span>Yearly Jan–Dec Breakdown</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('executive')}
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-1.5 ${
+              activeTab === 'executive' ? 'bg-white text-emerald-700 shadow-2xs' : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            <Layers className="w-3.5 h-3.5" />
+            <span>Complete Dental Clinic Summary</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('treatments')}
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-1.5 ${
+              activeTab === 'treatments' ? 'bg-white text-purple-700 shadow-2xs' : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            <HeartPulse className="w-3.5 h-3.5" />
+            <span>Dental Treatment Analytics</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('medications')}
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition cursor-pointer flex items-center gap-1.5 ${
+              activeTab === 'medications' ? 'bg-white text-teal-700 shadow-2xs' : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            <Pill className="w-3.5 h-3.5" />
+            <span>Medicine & Medication Reports</span>
+          </button>
+        </div>
+
+        {/* ------------------------------------------------------------- */}
+        {/* TAB 1: MONTHLY INCOME & COMPARISONS                           */}
+        {/* ------------------------------------------------------------- */}
+        {activeTab === 'monthly' && (
+          <div className="space-y-6">
+            
+            {/* Visual Bar Chart: Revenue vs Expenses */}
+            <div className="bg-slate-50/70 p-5 rounded-3xl border border-slate-200 space-y-4">
+              <div className="flex justify-between items-center">
+                <div>
+                  <h3 className="font-black text-slate-900 text-sm">Monthly Revenue vs Expenses ({selectedYear})</h3>
+                  <p className="text-[11px] text-slate-400">Comparison of collections against operational and dental expenses</p>
+                </div>
+                <div className="flex items-center gap-4 text-xs font-bold">
+                  <div className="flex items-center gap-1.5">
+                    <span className="w-3 h-3 rounded-md bg-emerald-500"></span>
+                    <span className="text-slate-700">Collected Revenue</span>
                   </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
-
-        {/* 4. Top Services & Laboratory Utilization */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          
-          {/* Most Utilized Dental Procedures */}
-          <div className="bg-white p-6 sm:p-7 rounded-3xl border border-slate-100 shadow-xs space-y-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Activity className="w-5 h-5 text-blue-600" />
-                <h3 className="text-base font-bold text-slate-900">Most Utilized Dental Procedures</h3>
+                  <div className="flex items-center gap-1.5">
+                    <span className="w-3 h-3 rounded-md bg-rose-500"></span>
+                    <span className="text-slate-700">Expenses</span>
+                  </div>
+                </div>
               </div>
-              <span className="text-xs text-slate-400 font-medium">Ranked by real volume</span>
-            </div>
 
-            {realTopServices.length === 0 ? (
-              <div className="text-center py-8 text-slate-400 text-xs">
-                <p>No dental procedures recorded yet.</p>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {realTopServices.map((srv, idx) => {
-                  const pct = Math.round((srv.count / maxSrvCount) * 100);
+              {/* Responsive Bar Grid */}
+              <div className="grid grid-cols-12 gap-2 pt-6 items-end h-48 border-b border-slate-200 pb-2">
+                {monthlyList.map((m, idx) => {
+                  const revHeight = maxMonthVal > 0 ? (m.collected_revenue / maxMonthVal) * 100 : 0;
+                  const expHeight = maxMonthVal > 0 ? (m.total_expenses / maxMonthVal) * 100 : 0;
+
                   return (
-                    <div key={idx} className="p-3.5 bg-slate-50/80 rounded-2xl space-y-2">
-                      <div className="flex justify-between items-center text-xs">
-                        <span className="font-bold text-slate-800">{srv._id}</span>
-                        <span className="font-mono font-bold text-emerald-700">${(srv.totalRevenue || 0).toFixed(2)}</span>
+                    <div key={idx} className="flex flex-col items-center gap-1 h-full justify-end group">
+                      <div className="w-full flex justify-center gap-1 items-end h-36">
+                        {/* Revenue Bar */}
+                        <div
+                          style={{ height: `${Math.max(revHeight, 4)}%` }}
+                          className="w-2.5 sm:w-3.5 bg-emerald-500 rounded-t-md transition-all group-hover:bg-emerald-600"
+                          title={`${m.month} Revenue: $${m.collected_revenue}`}
+                        />
+                        {/* Expense Bar */}
+                        <div
+                          style={{ height: `${Math.max(expHeight, 4)}%` }}
+                          className="w-2.5 sm:w-3.5 bg-rose-500 rounded-t-md transition-all group-hover:bg-rose-600"
+                          title={`${m.month} Expenses: $${m.total_expenses}`}
+                        />
                       </div>
-                      <div className="w-full bg-slate-200 h-1.5 rounded-full overflow-hidden">
-                        <div className="bg-blue-600 h-full rounded-full" style={{ width: `${pct}%` }}></div>
-                      </div>
-                      <div className="flex justify-between text-[10px] text-slate-400 font-medium">
-                        <span>{srv.count} procedures performed</span>
-                        <span>{pct}% share</span>
-                      </div>
+                      <span className="text-[10px] font-bold text-slate-500">{m.month}</span>
                     </div>
                   );
                 })}
               </div>
-            )}
-          </div>
-
-          {/* Diagnostic Laboratory Testing Volume */}
-          <div className="bg-white p-6 sm:p-7 rounded-3xl border border-slate-100 shadow-xs space-y-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <TestTube2 className="w-5 h-5 text-purple-600" />
-                <h3 className="text-base font-bold text-slate-900">Diagnostic Laboratory Utilization</h3>
-              </div>
-              <span className="text-xs text-slate-400 font-medium">Ranked by real volume</span>
             </div>
 
-            {realTopLabs.length === 0 ? (
-              <div className="text-center py-8 text-slate-400 text-xs">
-                <p>No lab tests recorded yet.</p>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {realTopLabs.map((lab, idx) => {
-                  const pct = Math.round((lab.count / maxLabCount) * 100);
-                  return (
-                    <div key={idx} className="p-3.5 bg-purple-50/50 rounded-2xl space-y-2 border border-purple-100/50">
-                      <div className="flex justify-between items-center text-xs">
-                        <span className="font-bold text-slate-800">{lab._id}</span>
-                        <span className="font-mono font-bold text-purple-700">${(lab.totalRevenue || 0).toFixed(2)}</span>
+            {/* Three Breakdown Columns: Payment Methods, Doctors, Expense Areas */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+              
+              {/* Payment Methods */}
+              <div className="p-4 bg-slate-50/70 rounded-3xl border border-slate-200 space-y-3">
+                <h4 className="font-black text-slate-900 text-xs uppercase tracking-wider flex items-center gap-2">
+                  <CreditCard className="w-4 h-4 text-blue-600" />
+                  <span>Income by Payment Method</span>
+                </h4>
+                <div className="space-y-2">
+                  {(financialData?.payment_methods || []).map((pm, idx) => (
+                    <div key={idx} className="bg-white p-2.5 rounded-2xl border border-slate-100 flex justify-between items-center text-xs">
+                      <div>
+                        <span className="font-bold text-slate-800 block">{pm.method}</span>
+                        <span className="text-[10px] text-slate-400">{pm.percentage}% of collections</span>
                       </div>
-                      <div className="w-full bg-purple-200 h-1.5 rounded-full overflow-hidden">
-                        <div className="bg-purple-600 h-full rounded-full" style={{ width: `${pct}%` }}></div>
-                      </div>
-                      <div className="flex justify-between text-[10px] text-slate-500 font-medium">
-                        <span>{lab.count} tests conducted</span>
-                        <span>{pct}% share</span>
-                      </div>
+                      <span className="font-mono font-bold text-emerald-700">${pm.amount.toFixed(2)}</span>
                     </div>
-                  );
-                })}
+                  ))}
+                </div>
               </div>
-            )}
-          </div>
 
-        </div>
+              {/* Income by Doctor */}
+              <div className="p-4 bg-slate-50/70 rounded-3xl border border-slate-200 space-y-3">
+                <h4 className="font-black text-slate-900 text-xs uppercase tracking-wider flex items-center gap-2">
+                  <Stethoscope className="w-4 h-4 text-purple-600" />
+                  <span>Income by Doctor / Provider</span>
+                </h4>
+                <div className="space-y-2">
+                  {(financialData?.doctor_income || []).map((doc, idx) => (
+                    <div key={idx} className="bg-white p-2.5 rounded-2xl border border-slate-100 flex justify-between items-center text-xs">
+                      <div>
+                        <span className="font-bold text-slate-800 block">{doc.doctor}</span>
+                        <span className="text-[10px] text-slate-400">{doc.percentage}% of clinic total</span>
+                      </div>
+                      <span className="font-mono font-bold text-purple-900">${doc.revenue.toFixed(2)}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Expense Categories */}
+              <div className="p-4 bg-slate-50/70 rounded-3xl border border-slate-200 space-y-3">
+                <h4 className="font-black text-slate-900 text-xs uppercase tracking-wider flex items-center gap-2">
+                  <TrendingDown className="w-4 h-4 text-rose-600" />
+                  <span>Expense Allocations</span>
+                </h4>
+                <div className="space-y-2">
+                  {(financialData?.expense_categories || []).map((ec, idx) => (
+                    <div key={idx} className="bg-white p-2.5 rounded-2xl border border-slate-100 flex justify-between items-center text-xs">
+                      <div className="min-w-0 flex-1 pr-2">
+                        <span className="font-bold text-slate-800 block truncate">{ec.category}</span>
+                        <span className="text-[10px] text-slate-400">{ec.percentage}%</span>
+                      </div>
+                      <span className="font-mono font-bold text-rose-600 shrink-0">${ec.amount.toFixed(2)}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+            </div>
+
+          </div>
+        )}
+
+        {/* ------------------------------------------------------------- */}
+        {/* TAB 2: YEARLY JAN–DEC BREAKDOWN                               */}
+        {/* ------------------------------------------------------------- */}
+        {activeTab === 'yearly' && (
+          <div className="space-y-4">
+            <div className="flex justify-between items-center">
+              <div>
+                <h3 className="font-black text-slate-900 text-sm">January through December Annual Income Statement</h3>
+                <p className="text-[11px] text-slate-400">12-Month itemized ledger of collections, expenses, and net profit</p>
+              </div>
+            </div>
+
+            <div className="overflow-x-auto rounded-2xl border border-slate-200">
+              <table className="w-full text-xs text-left">
+                <thead className="bg-slate-50 text-slate-500 font-bold uppercase text-[10px] tracking-wider border-b border-slate-200">
+                  <tr>
+                    <th className="py-3 px-4">Month</th>
+                    <th className="py-3 px-4 text-right">Collected Revenue ($)</th>
+                    <th className="py-3 px-4 text-right">Total Expenses ($)</th>
+                    <th className="py-3 px-4 text-right">Net Profit / Income ($)</th>
+                    <th className="py-3 px-4 text-right">Outstanding ($)</th>
+                    <th className="py-3 px-4 text-right">Discounts ($)</th>
+                    <th className="py-3 px-4 text-center">Invoices</th>
+                    <th className="py-3 px-4 text-center">Patients</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {monthlyList.map((m, idx) => (
+                    <tr key={idx} className="hover:bg-slate-50/80 transition font-mono">
+                      <td className="py-3 px-4 font-sans font-bold text-slate-900">{m.month}</td>
+                      <td className="py-3 px-4 text-right font-bold text-emerald-700">${m.collected_revenue.toFixed(2)}</td>
+                      <td className="py-3 px-4 text-right font-bold text-rose-600">${m.total_expenses.toFixed(2)}</td>
+                      <td className={`py-3 px-4 text-right font-black ${m.net_income >= 0 ? 'text-blue-700' : 'text-rose-700'}`}>
+                        ${m.net_income.toFixed(2)}
+                      </td>
+                      <td className="py-3 px-4 text-right text-amber-600">${m.outstanding_balances.toFixed(2)}</td>
+                      <td className="py-3 px-4 text-right text-slate-500">${m.discounts.toFixed(2)}</td>
+                      <td className="py-3 px-4 text-center text-slate-800">{m.invoices_count}</td>
+                      <td className="py-3 px-4 text-center text-slate-800">{m.patients_count}</td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot className="bg-slate-900 text-white font-mono font-bold text-xs border-t-2 border-slate-900">
+                  <tr>
+                    <td className="py-3.5 px-4 font-sans uppercase">Total Annual ({selectedYear})</td>
+                    <td className="py-3.5 px-4 text-right text-emerald-400">${summary.collected_revenue.toFixed(2)}</td>
+                    <td className="py-3.5 px-4 text-right text-rose-400">${summary.total_expenses.toFixed(2)}</td>
+                    <td className="py-3.5 px-4 text-right text-blue-300 text-sm font-black">${summary.net_income.toFixed(2)}</td>
+                    <td className="py-3.5 px-4 text-right text-amber-300">${summary.outstanding_revenue.toFixed(2)}</td>
+                    <td className="py-3.5 px-4 text-right">${summary.total_discounts.toFixed(2)}</td>
+                    <td className="py-3.5 px-4 text-center">{summary.total_invoices}</td>
+                    <td className="py-3.5 px-4 text-center">{summary.total_patients}</td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {/* ------------------------------------------------------------- */}
+        {/* TAB 3: COMPLETE CLINIC DENTAL SUMMARY                         */}
+        {/* ------------------------------------------------------------- */}
+        {activeTab === 'executive' && (
+          <div className="space-y-6">
+            
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              
+              {/* Patient Demographics */}
+              <div className="p-5 bg-slate-50/70 rounded-3xl border border-slate-200 space-y-3">
+                <h4 className="font-black text-slate-900 text-xs uppercase tracking-wider flex items-center gap-2">
+                  <Users className="w-4 h-4 text-blue-600" />
+                  <span>Patient Demographics</span>
+                </h4>
+                <div className="space-y-2 text-xs font-mono">
+                  <div className="flex justify-between bg-white p-2 rounded-xl">
+                    <span className="font-sans text-slate-600">Total Registered:</span>
+                    <strong className="text-slate-900">{statsData?.patients?.total || summary.total_patients}</strong>
+                  </div>
+                  <div className="flex justify-between bg-white p-2 rounded-xl">
+                    <span className="font-sans text-slate-600">New Registered:</span>
+                    <strong className="text-emerald-700">{statsData?.patients?.month || 0}</strong>
+                  </div>
+                  <div className="flex justify-between bg-white p-2 rounded-xl">
+                    <span className="font-sans text-slate-600">Active Patient Queue:</span>
+                    <strong className="text-blue-700">{statsData?.visits?.todayCount || 0}</strong>
+                  </div>
+                </div>
+              </div>
+
+              {/* Appointments Flow */}
+              <div className="p-5 bg-slate-50/70 rounded-3xl border border-slate-200 space-y-3">
+                <h4 className="font-black text-slate-900 text-xs uppercase tracking-wider flex items-center gap-2">
+                  <Calendar className="w-4 h-4 text-emerald-600" />
+                  <span>Appointments Analytics</span>
+                </h4>
+                <div className="space-y-2 text-xs font-mono">
+                  <div className="flex justify-between bg-white p-2 rounded-xl">
+                    <span className="font-sans text-slate-600">Total Scheduled:</span>
+                    <strong className="text-slate-900">{statsData?.appointments?.todayCount || 0} today</strong>
+                  </div>
+                  <div className="flex justify-between bg-white p-2 rounded-xl">
+                    <span className="font-sans text-slate-600">Upcoming Confirmed:</span>
+                    <strong className="text-emerald-700">{statsData?.appointments?.upcomingCount || 0}</strong>
+                  </div>
+                  <div className="flex justify-between bg-white p-2 rounded-xl">
+                    <span className="font-sans text-slate-600">Pending Follow-ups:</span>
+                    <strong className="text-amber-600">{statsData?.followups?.pendingCount || 0}</strong>
+                  </div>
+                </div>
+              </div>
+
+              {/* Clinical Procedures */}
+              <div className="p-5 bg-slate-50/70 rounded-3xl border border-slate-200 space-y-3">
+                <h4 className="font-black text-slate-900 text-xs uppercase tracking-wider flex items-center gap-2">
+                  <HeartPulse className="w-4 h-4 text-purple-600" />
+                  <span>Treatments & Lab Volume</span>
+                </h4>
+                <div className="space-y-2 text-xs font-mono">
+                  <div className="flex justify-between bg-white p-2 rounded-xl">
+                    <span className="font-sans text-slate-600">Completed Treatments:</span>
+                    <strong className="text-slate-900">{treatmentData?.total_treatments || 0}</strong>
+                  </div>
+                  <div className="flex justify-between bg-white p-2 rounded-xl">
+                    <span className="font-sans text-slate-600">Consultations Done:</span>
+                    <strong className="text-purple-900">{statsData?.consultations?.totalCount || 0}</strong>
+                  </div>
+                  <div className="flex justify-between bg-white p-2 rounded-xl">
+                    <span className="font-sans text-slate-600">Lab Diagnostic Tests:</span>
+                    <strong className="text-indigo-700">{statsData?.lab?.completedCount || 0}</strong>
+                  </div>
+                </div>
+              </div>
+
+            </div>
+
+            {/* Doctor Leaderboard Table */}
+            <div className="bg-slate-50/70 p-5 rounded-3xl border border-slate-200 space-y-3">
+              <h4 className="font-black text-slate-900 text-xs uppercase tracking-wider flex items-center gap-2">
+                <Award className="w-4 h-4 text-amber-600" />
+                <span>Doctor Performance & Productivity Report</span>
+              </h4>
+              <div className="overflow-x-auto rounded-2xl border border-slate-200">
+                <table className="w-full text-xs text-left bg-white">
+                  <thead className="bg-slate-50 text-[10px] font-bold text-slate-400 uppercase">
+                    <tr>
+                      <th className="py-2.5 px-4">Doctor Name</th>
+                      <th className="py-2.5 px-4 text-center">Consultations</th>
+                      <th className="py-2.5 px-4 text-center">Treatments</th>
+                      <th className="py-2.5 px-4 text-center">Lab Orders</th>
+                      <th className="py-2.5 px-4 text-right">Revenue Generated ($)</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {doctorPerformance.map((doc, idx) => (
+                      <tr key={idx} className="hover:bg-slate-50 font-mono">
+                        <td className="py-2.5 px-4 font-sans font-bold text-slate-900">{doc.name}</td>
+                        <td className="py-2.5 px-4 text-center text-slate-700">{doc.consultations}</td>
+                        <td className="py-2.5 px-4 text-center text-slate-700">{doc.treatments}</td>
+                        <td className="py-2.5 px-4 text-center text-slate-700">{doc.labRequests}</td>
+                        <td className="py-2.5 px-4 text-right font-black text-emerald-700">${doc.revenue.toFixed(2)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+          </div>
+        )}
+
+        {/* ------------------------------------------------------------- */}
+        {/* TAB 4: DENTAL TREATMENT ANALYTICS                             */}
+        {/* ------------------------------------------------------------- */}
+        {activeTab === 'treatments' && (
+          <div className="space-y-4">
+            <div className="flex justify-between items-center">
+              <div>
+                <h3 className="font-black text-slate-900 text-sm">Dental Procedure & Treatment Analytics</h3>
+                <p className="text-[11px] text-slate-400">Volume and revenue by procedure (RCT, Extraction, Filling, Cleaning, Implants, etc.)</p>
+              </div>
+            </div>
+
+            <div className="overflow-x-auto rounded-2xl border border-slate-200">
+              <table className="w-full text-xs text-left">
+                <thead className="bg-slate-50 text-slate-500 font-bold uppercase text-[10px] tracking-wider border-b border-slate-200">
+                  <tr>
+                    <th className="py-3 px-4">Dental Procedure</th>
+                    <th className="py-3 px-4 text-center">Performed Count</th>
+                    <th className="py-3 px-4 text-right">Average Price ($)</th>
+                    <th className="py-3 px-4 text-right">Total Revenue ($)</th>
+                    <th className="py-3 px-4">Lead Performing Doctor</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {(treatmentData?.procedure_breakdown || []).map((proc, idx) => (
+                    <tr key={idx} className="hover:bg-slate-50 transition">
+                      <td className="py-3 px-4 font-bold text-slate-900 flex items-center gap-2">
+                        <span className="w-2 h-2 rounded-full bg-blue-600"></span>
+                        <span>{proc.procedure_name}</span>
+                      </td>
+                      <td className="py-3 px-4 text-center font-mono font-bold text-slate-800">
+                        {proc.count}
+                      </td>
+                      <td className="py-3 px-4 text-right font-mono text-slate-600">
+                        ${proc.avg_price.toFixed(2)}
+                      </td>
+                      <td className="py-3 px-4 text-right font-mono font-black text-purple-900 text-sm">
+                        ${proc.total_revenue.toFixed(2)}
+                      </td>
+                      <td className="py-3 px-4 text-slate-700 font-medium">{proc.top_doctor}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {/* ------------------------------------------------------------- */}
+        {/* TAB 5: MEDICINE & MEDICATION REPORTS                          */}
+        {/* ------------------------------------------------------------- */}
+        {activeTab === 'medications' && (
+          <div className="space-y-4">
+            
+            {/* Inventory Valuation Header */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-slate-50 p-4 rounded-3xl border border-slate-200 font-mono text-xs">
+              <div>
+                <span className="text-[10px] font-bold text-slate-400 uppercase font-sans">Distinct Drugs</span>
+                <p className="text-base font-black text-slate-800">{medicationData?.summary?.total_distinct_medicines || 0}</p>
+              </div>
+              <div>
+                <span className="text-[10px] font-bold text-slate-400 uppercase font-sans">Total Stock Units</span>
+                <p className="text-base font-black text-blue-700">{medicationData?.summary?.total_stock_units || 0}</p>
+              </div>
+              <div>
+                <span className="text-[10px] font-bold text-slate-400 uppercase font-sans">Inventory Cost Value</span>
+                <p className="text-base font-black text-rose-600">${(medicationData?.summary?.total_inventory_cost || 0).toFixed(2)}</p>
+              </div>
+              <div>
+                <span className="text-[10px] font-bold text-slate-400 uppercase font-sans">Total Selling Value</span>
+                <p className="text-base font-black text-emerald-700">${(medicationData?.summary?.total_sales_value || 0).toFixed(2)}</p>
+              </div>
+            </div>
+
+            {/* Drugs Report Table */}
+            <div className="overflow-x-auto rounded-2xl border border-slate-200">
+              <table className="w-full text-xs text-left">
+                <thead className="bg-slate-50 text-slate-500 font-bold uppercase text-[10px] tracking-wider border-b border-slate-200">
+                  <tr>
+                    <th className="py-3 px-4">Medicine Name</th>
+                    <th className="py-3 px-4">Category</th>
+                    <th className="py-3 px-4">Batch / Expiry</th>
+                    <th className="py-3 px-4 text-right">Cost Price ($)</th>
+                    <th className="py-3 px-4 text-right">Selling Price ($)</th>
+                    <th className="py-3 px-4 text-center">Remaining Stock</th>
+                    <th className="py-3 px-4 text-center">Units Sold</th>
+                    <th className="py-3 px-4 text-right">Dispensed Revenue ($)</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {(medicationData?.medications || []).map((med) => (
+                    <tr key={med._id} className="hover:bg-slate-50 transition">
+                      <td className="py-3 px-4 font-bold text-slate-900">
+                        {med.name} <span className="text-[10px] text-slate-400 font-normal">({med.dosage_form})</span>
+                      </td>
+                      <td className="py-3 px-4 text-slate-600">{med.category}</td>
+                      <td className="py-3 px-4 font-mono text-[11px]">
+                        <span className="block text-slate-700">{med.batch_number}</span>
+                        <span className="text-[10px] text-slate-400">{med.expiry_date ? new Date(med.expiry_date).toLocaleDateString() : 'N/A'}</span>
+                      </td>
+                      <td className="py-3 px-4 text-right font-mono text-slate-600">${med.cost_price.toFixed(2)}</td>
+                      <td className="py-3 px-4 text-right font-mono text-slate-900 font-bold">${med.unit_price.toFixed(2)}</td>
+                      <td className="py-3 px-4 text-center font-mono font-bold text-purple-900">{med.current_stock}</td>
+                      <td className="py-3 px-4 text-center font-mono font-bold text-emerald-700">{med.quantity_dispensed}</td>
+                      <td className="py-3 px-4 text-right font-mono font-black text-emerald-800 text-sm">
+                        ${med.total_dispensed_revenue.toFixed(2)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+          </div>
+        )}
 
       </div>
 

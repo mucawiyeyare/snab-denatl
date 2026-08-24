@@ -5,6 +5,7 @@ import Invoice from '../models/Invoice.js';
 import LabRequest from '../models/LabRequest.js';
 import Prescription from '../models/Prescription.js';
 import Medicine from '../models/Medicine.js';
+import Expense from '../models/Expense.js';
 
 export const generatePatientNumber = async () => {
   const count = await Patient.countDocuments();
@@ -52,4 +53,12 @@ export const generateMedicineCode = async () => {
   const nextNum = (count + 1).toString().padStart(3, '0');
   return `MED-${nextNum}`;
 };
+
+export const generateExpenseCode = async () => {
+  const year = new Date().getFullYear();
+  const count = await Expense.countDocuments();
+  const nextNum = (count + 1).toString().padStart(5, '0');
+  return `EXP-${year}-${nextNum}`;
+};
+
 

@@ -111,9 +111,21 @@ export const createPrescriptionApi = (data) => api.post('/prescriptions', data);
 export const dispensePrescriptionApi = (id, data) => api.post(`/prescriptions/${id}/dispense`, data);
 export const getPharmacyReportsApi = () => api.get('/medicines/reports/sales-analytics');
 
+// Expenses Management
+export const getExpensesApi = (params) => api.get('/expenses', { params });
+export const getExpenseByIdApi = (id) => api.get(`/expenses/${id}`);
+export const createExpenseApi = (data) => api.post('/expenses', data);
+export const updateExpenseApi = (id, data) => api.put(`/expenses/${id}`, data);
+export const deleteExpenseApi = (id) => api.delete(`/expenses/${id}`);
+export const getExpenseSummaryApi = () => api.get('/expenses/summary/stats');
+
 // Reports & Audit & Settings
 export const getDashboardStatsApi = (params) => api.get('/reports/dashboard-stats', { params });
 export const globalSearchApi = (params) => api.get('/reports/search', { params });
+export const getDailyIncomeApi = (params) => api.get('/reports/daily-income', { params });
+export const getFinancialSummaryApi = (params) => api.get('/reports/financial-summary', { params });
+export const getTreatmentAnalyticsApi = (params) => api.get('/reports/treatment-analytics', { params });
+export const getMedicationReportApi = (params) => api.get('/reports/medication-summary', { params });
 export const getDoctorPerformanceReportApi = () => api.get('/reports/doctor-performance');
 export const getServiceAnalyticsApi = () => api.get('/reports/service-analytics');
 
@@ -121,3 +133,4 @@ export const getAuditLogsApi = (params) => api.get('/audit-logs', { params });
 
 export const getSettingsApi = () => api.get('/settings');
 export const updateSettingsApi = (data) => api.put('/settings', data);
+

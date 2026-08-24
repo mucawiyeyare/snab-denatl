@@ -18,6 +18,8 @@ import DentalInventory from './pages/inventory/DentalInventory.jsx';
 import LabManager from './pages/lab/LabManager.jsx';
 import PharmacyManager from './pages/pharmacy/PharmacyManager.jsx';
 import BillingManager from './pages/billing/BillingManager.jsx';
+import DailyIncome from './pages/billing/DailyIncome.jsx';
+import ExpenseManager from './pages/expenses/ExpenseManager.jsx';
 import PaymentList from './pages/payments/PaymentList.jsx';
 import AppointmentList from './pages/appointments/AppointmentList.jsx';
 import FollowupList from './pages/followups/FollowupList.jsx';
@@ -68,8 +70,10 @@ function App() {
           {/* Pharmacy & Prescriptions */}
           <Route path="/pharmacy" element={<PharmacyManager />} />
 
-          {/* Billing & Payments */}
+          {/* Billing, Daily Income & Payments */}
           <Route path="/billing" element={<BillingManager />} />
+          <Route path="/daily-income" element={<DailyIncome />} />
+          <Route path="/expenses" element={<ExpenseManager />} />
           <Route path="/payments" element={<PaymentList />} />
 
           {/* Appointments & Follow-ups */}
