@@ -80,6 +80,7 @@ const DentalInventory = () => {
 
   const [submitting, setSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
+  const [usageErrorMsg, setUsageErrorMsg] = useState('');
 
   useEffect(() => {
     fetchInventory();
@@ -88,15 +89,14 @@ const DentalInventory = () => {
   const fetchInventory = async () => {
     setLoading(true);
     try {
-      const res = await getInventoryApi({
-        category: categoryFilter || undefined,
-        status: statusFilter || undefined,
-        search: search || undefined
-      });
+      const params = {};
+      if (categoryFilter) params.category = categoryFilter;
+      if (statusFilter) params.status = statusFilter;
+      if (search) params.search = search;
+
+      const res = await getInventoryApi(params);
       setItems(res.data?.data || []);
-      if (res.data?.metrics) {
-        setMetrics(res.data.metrics);
-      }
+      setMetrics(res.data?.metrics || { totalItems: 0, totalValue: 0, lowStockCount: 0, expiredCount: 0 });
     } catch (err) {
       console.error('Error fetching inventory:', err);
     } finally {
@@ -140,6 +140,7 @@ const DentalInventory = () => {
 
   const handleOpenUsageModal = (item) => {
     setSelectedItemForUsage(item);
+    setUsageErrorMsg('');
     setUsageForm({
       quantity_used: 1,
       notes: ''
@@ -178,15 +179,18 @@ const DentalInventory = () => {
   const handleSubmitUsage = async (e) => {
     e.preventDefault();
     setSubmitting(true);
+    setUsageErrorMsg('');
     try {
       await recordItemUsageApi(selectedItemForUsage._id, {
         quantity_used: Number(usageForm.quantity_used),
         notes: usageForm.notes
       });
       setIsUsageModalOpen(false);
+      setUsageForm({ quantity_used: 1, notes: '' });
       fetchInventory();
     } catch (err) {
       console.error('Error recording usage:', err);
+      setUsageErrorMsg(err.response?.data?.message || 'Failed to record usage deduction');
     } finally {
       setSubmitting(false);
     }
@@ -660,6 +664,13 @@ const DentalInventory = () => {
         maxWidth="max-w-md"
       >
         <form onSubmit={handleSubmitUsage} className="space-y-3.5 text-xs">
+          {usageErrorMsg && (
+            <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-rose-700 font-bold text-xs flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+              <span>{usageErrorMsg}</span>
+            </div>
+          )}
+
           <div className="bg-slate-50 p-3 rounded-2xl border border-slate-200 space-y-1.5">
             <div className="flex justify-between">
               <span className="text-slate-500">Currently Available:</span>

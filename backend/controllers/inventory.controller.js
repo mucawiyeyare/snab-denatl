@@ -113,24 +113,58 @@ export const recordItemUsage = async (req, res, next) => {
     }
 
     const additionalUsed = Number(quantity_used) || 0;
-    item.quantity_used = (item.quantity_used || 0) + additionalUsed;
-    if (notes) {
-      item.notes = item.notes ? `${item.notes}\n[Used ${additionalUsed} units]: ${notes}` : `[Used ${additionalUsed} units]: ${notes}`;
+    if (additionalUsed <= 0) {
+      return res.status(400).json({ success: false, message: 'Please enter a valid quantity used (greater than 0).' });
     }
 
-    await item.save();
+    const currentAvailable = Math.max(0, (item.quantity_purchased || 0) - (item.quantity_used || 0));
+    if (additionalUsed > currentAvailable) {
+      return res.status(400).json({
+        success: false,
+        message: `Cannot deduct ${additionalUsed} units. Only ${currentAvailable} units available in stock.`
+      });
+    }
+
+    const newQuantityUsed = (item.quantity_used || 0) + additionalUsed;
+    const newQuantityAvailable = Math.max(0, (item.quantity_purchased || 0) - newQuantityUsed);
+
+    // Determine status
+    let newStatus = 'In Stock';
+    if (item.expiry_date && new Date(item.expiry_date) < new Date()) {
+      newStatus = 'Expired';
+    } else if (newQuantityAvailable === 0) {
+      newStatus = 'Out of Stock';
+    } else if (newQuantityAvailable <= (item.reorder_level || 5)) {
+      newStatus = 'Low Stock';
+    }
+
+    const updatedNotes = notes && notes.trim()
+      ? (item.notes ? `${item.notes}\n[Used ${additionalUsed} units on ${new Date().toLocaleDateString()}]: ${notes.trim()}` : `[Used ${additionalUsed} units on ${new Date().toLocaleDateString()}]: ${notes.trim()}`)
+      : item.notes;
+
+    const updatedItem = await DentalInventory.findByIdAndUpdate(
+      item._id,
+      {
+        quantity_used: newQuantityUsed,
+        quantity_available: newQuantityAvailable,
+        status: newStatus,
+        notes: updatedNotes
+      },
+      { new: true }
+    );
 
     await logAudit({
       user: req.user,
       action: 'RECORD_INVENTORY_USAGE',
       entity: 'DentalInventory',
       entity_id: item._id,
-      details: { name: item.name, used: additionalUsed, remaining: item.quantity_available }
+      details: { name: item.name, used: additionalUsed, remaining: updatedItem.quantity_available }
     });
 
-    res.json({ success: true, message: 'Item usage recorded successfully', data: item });
+    res.json({ success: true, message: 'Item usage recorded successfully', data: updatedItem });
   } catch (error) {
-    next(error);
+    console.error('Error in recordItemUsage:', error);
+    res.status(500).json({ success: false, message: error.message || 'Error recording item usage' });
   }
 };
 

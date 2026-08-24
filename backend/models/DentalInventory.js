@@ -3,7 +3,8 @@ import mongoose from 'mongoose';
 const dentalInventorySchema = new mongoose.Schema({
   item_code: {
     type: String,
-    unique: true
+    unique: true,
+    sparse: true
   },
   name: {
     type: String,
