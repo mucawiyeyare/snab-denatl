@@ -4,12 +4,27 @@ import { logAudit } from '../middleware/audit.js';
 
 export const getInvoices = async (req, res, next) => {
   try {
-    const { status, patient_id, visit_id } = req.query;
+    const { status, patient_id, visit_id, date, startDate, endDate } = req.query;
     let filter = {};
 
     if (status) filter.status = status;
     if (patient_id) filter.patient_id = patient_id;
     if (visit_id) filter.visit_id = visit_id;
+
+    if (date) {
+      const target = new Date(date);
+      const startOfDay = new Date(target.getFullYear(), target.getMonth(), target.getDate(), 0, 0, 0, 0);
+      const endOfDay = new Date(target.getFullYear(), target.getMonth(), target.getDate(), 23, 59, 59, 999);
+      filter.createdAt = { $gte: startOfDay, $lte: endOfDay };
+    } else if (startDate || endDate) {
+      filter.createdAt = {};
+      if (startDate) filter.createdAt.$gte = new Date(startDate);
+      if (endDate) {
+        const end = new Date(endDate);
+        end.setHours(23, 59, 59, 999);
+        filter.createdAt.$lte = end;
+      }
+    }
 
     const invoices = await Invoice.find(filter)
       .populate('patient_id', 'name patient_number telephone')
