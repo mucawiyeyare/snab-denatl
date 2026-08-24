@@ -20,13 +20,9 @@ import {
   ChevronDown,
   X,
   ShieldCheck,
-  Contact,
   FileText,
   User,
-  UserCheck,
-  DollarSign,
-  TrendingDown,
-  Wallet
+  UserCheck
 } from 'lucide-react';
 
 const Sidebar = ({ isOpen, onClose, onOpenProfile }) => {
@@ -60,8 +56,6 @@ const Sidebar = ({ isOpen, onClose, onOpenProfile }) => {
         { label: 'Visits & Patient Flow', path: '/visits', icon: Activity },
         { label: 'Dental Services', path: '/services', icon: Sparkles },
         { label: 'Billing & Invoices', path: '/billing', icon: CreditCard },
-        { label: 'Daily Income', path: '/daily-income', icon: DollarSign },
-        { label: 'Expenses', path: '/expenses', icon: TrendingDown },
         { label: 'Cashier & Receipts', path: '/payments', icon: Receipt },
         { label: 'Pharmacy & Medicines', path: '/pharmacy', icon: Pill },
         { label: 'Laboratory', path: '/lab', icon: TestTube2 },
@@ -79,13 +73,10 @@ const Sidebar = ({ isOpen, onClose, onOpenProfile }) => {
       { label: 'Dental Treatments', path: '/treatments', icon: HeartPulse },
       { label: 'Dental Services', path: '/services', icon: Sparkles },
       { label: 'Billing & Invoices', path: '/billing', icon: CreditCard },
-      { label: 'Daily Income', path: '/daily-income', icon: DollarSign },
-      { label: 'Clinic Expenses', path: '/expenses', icon: TrendingDown },
       { label: 'Pharmacy & Medicines', path: '/pharmacy', icon: Pill },
       { label: 'Laboratory', path: '/lab', icon: TestTube2 },
       { label: 'Dental Inventory', path: '/inventory', icon: Boxes },
       { label: 'Doctors', path: '/doctors', icon: UserCheck },
-      { label: 'Staff Directory', path: '/employees', icon: Contact },
       { label: 'Users & Roles', path: '/users', icon: ShieldCheck },
       { label: 'Audit Logs', path: '/audit-logs', icon: FileText },
       { label: 'Reports & Analytics', path: '/reports', icon: FileBarChart },
