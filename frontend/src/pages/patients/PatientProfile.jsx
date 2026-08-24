@@ -14,6 +14,7 @@ import {
   HeartPulse,
   Stethoscope,
   TestTube2,
+  Pill,
   Receipt,
   Clock,
   AlertCircle,
@@ -122,7 +123,7 @@ const PatientProfile = () => {
     );
   }
 
-  const { patient, visits, consultations, treatments, labResults, invoices, payments, followups } = data;
+  const { patient, visits, consultations, treatments, labResults, invoices, payments, followups, prescriptions = [] } = data;
 
   const validInvoices = invoices || [];
   const validPayments = payments || [];
@@ -438,6 +439,7 @@ const PatientProfile = () => {
             {[
               { id: 'overview', label: `Visits & Consultations (${visits.length})` },
               { id: 'treatments', label: `Dental Treatments (${treatments.length})` },
+              { id: 'prescriptions', label: `Prescriptions & Pharmacy (${prescriptions.length})` },
               { id: 'lab', label: `Lab Results (${labResults.length})` },
               { id: 'billing', label: `Financial Summary & Receipts (${financialTransactions.length || payments.length})` },
               { id: 'followups', label: `Follow-ups (${followups.length})` }
@@ -590,6 +592,108 @@ const PatientProfile = () => {
                         <span>Staff: {r.performed_by}</span>
                         <span>{new Date(r.result_date).toLocaleString()}</span>
                       </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Tab: Prescriptions & Pharmacy */}
+          {activeTab === 'prescriptions' && (
+            <div className="space-y-4">
+              <div className="flex justify-between items-center">
+                <div>
+                  <h3 className="text-sm sm:text-base font-bold text-slate-900 flex items-center gap-2">
+                    <Pill className="w-4 h-4 text-purple-600" />
+                    <span>Prescriptions & Pharmacy History</span>
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    Medications prescribed by attending doctors, dosage, directions, and pharmacy purchase status
+                  </p>
+                </div>
+              </div>
+
+              {prescriptions.length === 0 ? (
+                <div className="text-center py-10 bg-slate-50 rounded-2xl border border-dashed border-slate-200 p-6">
+                  <Pill className="w-8 h-8 text-slate-300 mx-auto mb-2" />
+                  <p className="text-xs font-bold text-slate-700">No prescriptions on record</p>
+                  <p className="text-[11px] text-slate-400 mt-0.5">When doctors prescribe medications, they will appear here.</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {prescriptions.map((rx) => (
+                    <div key={rx._id} className="p-4 rounded-2xl bg-white border border-slate-200 shadow-2xs space-y-3">
+                      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 pb-2.5 border-b border-slate-100">
+                        <div className="flex items-center gap-2.5">
+                          <div className="w-8 h-8 rounded-xl bg-purple-50 text-purple-700 flex items-center justify-center font-bold text-xs font-mono">
+                            Rx
+                          </div>
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <span className="font-mono font-bold text-purple-900 text-xs">{rx.prescription_number}</span>
+                              <span className="text-slate-300">•</span>
+                              <span className="text-xs text-slate-600 font-medium">
+                                Prescribed by <strong>Dr. {rx.doctor_id?.full_name || rx.doctor_id?.username}</strong>
+                              </span>
+                            </div>
+                            <p className="text-[10px] text-slate-400">
+                              Visit: {rx.visit_id?.visit_number || 'VIS'} • {new Date(rx.createdAt).toLocaleDateString()}
+                            </p>
+                          </div>
+                        </div>
+                        <StatusBadge status={rx.payment_status === 'Paid' ? 'Paid' : (rx.status === 'Dispensed' ? 'Dispensed' : 'Unpaid')} />
+                      </div>
+
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-xs text-left">
+                          <thead>
+                            <tr className="text-[10px] font-bold text-slate-400 uppercase tracking-wider border-b border-slate-100">
+                              <th className="pb-1.5">Medicine</th>
+                              <th className="pb-1.5">Dose</th>
+                              <th className="pb-1.5">Frequency</th>
+                              <th className="pb-1.5">Duration</th>
+                              <th className="pb-1.5 text-center">Qty</th>
+                              <th className="pb-1.5 text-right">Price</th>
+                              <th className="pb-1.5 text-right">Purchase Status</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100">
+                            {rx.items?.map((item, idx) => (
+                              <tr key={idx} className="hover:bg-slate-50/50">
+                                <td className="py-2 font-bold text-slate-900">
+                                  <span>{item.medicine_name}</span>
+                                  {item.instructions && (
+                                    <span className="block text-[10px] text-slate-400 font-normal">{item.instructions}</span>
+                                  )}
+                                </td>
+                                <td className="py-2 font-mono text-slate-700">{item.dosage || '500 mg'}</td>
+                                <td className="py-2 text-slate-600">{item.frequency || '3× daily'}</td>
+                                <td className="py-2 text-slate-600">{item.duration || '5 days'}</td>
+                                <td className="py-2 text-center font-mono font-bold text-purple-700">{item.quantity}</td>
+                                <td className="py-2 text-right font-mono font-bold text-slate-900">${Number(item.total_price || 0).toFixed(2)}</td>
+                                <td className="py-2 text-right">
+                                  <span className={`px-2 py-0.5 rounded-md text-[9px] font-bold ${
+                                    item.status === 'Dispensed' || item.is_purchased
+                                      ? 'bg-emerald-100 text-emerald-800'
+                                      : item.status === 'Declined / External'
+                                      ? 'bg-slate-100 text-slate-500'
+                                      : 'bg-amber-100 text-amber-800'
+                                  }`}>
+                                    {item.status || 'Pending'}
+                                  </span>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+
+                      {rx.notes && (
+                        <p className="text-[11px] text-slate-500 bg-slate-50 p-2 rounded-xl">
+                          <strong>Notes:</strong> {rx.notes}
+                        </p>
+                      )}
                     </div>
                   ))}
                 </div>

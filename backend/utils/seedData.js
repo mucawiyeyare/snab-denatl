@@ -14,6 +14,7 @@ import Treatment from '../models/Treatment.js';
 import Invoice from '../models/Invoice.js';
 import Payment from '../models/Payment.js';
 import DentalInventory from '../models/DentalInventory.js';
+import Medicine from '../models/Medicine.js';
 import AuditLog from '../models/AuditLog.js';
 
 dotenv.config();
@@ -200,6 +201,106 @@ const seedAll = async () => {
       await LabTest.findOneAndUpdate({ test_code: test.test_code }, test, { upsert: true, returnDocument: 'after' });
     }
     console.log('[Seed] Lab Tests created/updated.');
+
+    // 5.5 Pharmacy Medicines Catalog
+    const medicinesData = [
+      {
+        medicine_code: 'MED-001',
+        name: 'Amoxicillin',
+        generic_name: 'Amoxicillin Trihydrate',
+        category: 'Antibiotics',
+        dosage_form: 'Capsule',
+        strength: '500 mg',
+        unit_price: 3.00,
+        cost_price: 1.50,
+        stock_quantity: 150,
+        reorder_level: 25,
+        instructions_default: 'Take 1 capsule 3 times daily for 5 days after meals'
+      },
+      {
+        medicine_code: 'MED-002',
+        name: 'Metronidazole',
+        generic_name: 'Metronidazole',
+        category: 'Antibiotics',
+        dosage_form: 'Tablet',
+        strength: '400 mg',
+        unit_price: 2.50,
+        cost_price: 1.20,
+        stock_quantity: 120,
+        reorder_level: 20,
+        instructions_default: 'Take 1 tablet 3 times daily for 5 days after food'
+      },
+      {
+        medicine_code: 'MED-003',
+        name: 'Paracetamol',
+        generic_name: 'Acetaminophen / Paracetamol',
+        category: 'Pain Relief / Analgesic',
+        dosage_form: 'Tablet',
+        strength: '500 mg',
+        unit_price: 1.50,
+        cost_price: 0.75,
+        stock_quantity: 200,
+        reorder_level: 30,
+        instructions_default: 'Take 1 tablet 3 times daily for 3 days as needed for pain'
+      },
+      {
+        medicine_code: 'MED-004',
+        name: 'Ibuprofen',
+        generic_name: 'Ibuprofen',
+        category: 'Anti-inflammatory (NSAID)',
+        dosage_form: 'Tablet',
+        strength: '400 mg',
+        unit_price: 2.00,
+        cost_price: 1.00,
+        stock_quantity: 140,
+        reorder_level: 25,
+        instructions_default: 'Take 1 tablet twice daily after meals'
+      },
+      {
+        medicine_code: 'MED-005',
+        name: 'Augmentin',
+        generic_name: 'Amoxicillin + Clavulanic Acid',
+        category: 'Antibiotics',
+        dosage_form: 'Tablet',
+        strength: '625 mg',
+        unit_price: 6.00,
+        cost_price: 3.50,
+        stock_quantity: 80,
+        reorder_level: 15,
+        instructions_default: 'Take 1 tablet every 12 hours after food'
+      },
+      {
+        medicine_code: 'MED-006',
+        name: 'Chlorhexidine Mouthwash',
+        generic_name: 'Chlorhexidine Gluconate 0.2%',
+        category: 'Mouthwash & Antiseptic',
+        dosage_form: 'Mouthwash',
+        strength: '0.2% (300ml)',
+        unit_price: 5.00,
+        cost_price: 2.80,
+        stock_quantity: 60,
+        reorder_level: 10,
+        instructions_default: 'Rinse mouth with 10ml twice daily after brushing'
+      },
+      {
+        medicine_code: 'MED-007',
+        name: 'Miconazole Oral Gel',
+        generic_name: 'Miconazole Nitrate 2%',
+        category: 'Dermatologic & Topicals',
+        dosage_form: 'Oral Gel / Cream',
+        strength: '2% (40g)',
+        unit_price: 4.50,
+        cost_price: 2.20,
+        stock_quantity: 50,
+        reorder_level: 10,
+        instructions_default: 'Apply small quantity over affected oral mucosal area'
+      }
+    ];
+
+    for (const med of medicinesData) {
+      await Medicine.findOneAndUpdate({ medicine_code: med.medicine_code }, med, { upsert: true, returnDocument: 'after' });
+    }
+    console.log('[Seed] Pharmacy Medicines created/updated.');
 
     // 6. Settings
     await Setting.findOneAndUpdate({}, {

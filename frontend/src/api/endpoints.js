@@ -98,6 +98,19 @@ export const updateInventoryApi = (id, data) => api.put(`/inventory/${id}`, data
 export const recordItemUsageApi = (id, data) => api.post(`/inventory/${id}/usage`, data);
 export const deleteInventoryApi = (id) => api.delete(`/inventory/${id}`);
 
+// Pharmacy Medicines & Prescriptions
+export const getMedicinesApi = (params) => api.get('/medicines', { params });
+export const getMedicineByIdApi = (id) => api.get(`/medicines/${id}`);
+export const createMedicineApi = (data) => api.post('/medicines', data);
+export const updateMedicineApi = (id, data) => api.put(`/medicines/${id}`, data);
+export const deleteMedicineApi = (id) => api.delete(`/medicines/${id}`);
+
+export const getPrescriptionsApi = (params) => api.get('/prescriptions', { params });
+export const getPrescriptionByIdApi = (id) => api.get(`/prescriptions/${id}`);
+export const createPrescriptionApi = (data) => api.post('/prescriptions', data);
+export const dispensePrescriptionApi = (id, data) => api.post(`/prescriptions/${id}/dispense`, data);
+export const getPharmacyReportsApi = () => api.get('/medicines/reports/sales-analytics');
+
 // Reports & Audit & Settings
 export const getDashboardStatsApi = (params) => api.get('/reports/dashboard-stats', { params });
 export const globalSearchApi = (params) => api.get('/reports/search', { params });

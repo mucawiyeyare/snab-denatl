@@ -525,16 +525,18 @@ const VisitList = () => {
 
       {/* Patient Journey Flow Diagram Bar */}
       <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-xs overflow-x-auto">
-        <div className="flex items-center justify-between min-w-[700px] text-[11px] font-bold text-slate-400">
-          <span className="flex items-center gap-1.5 text-blue-600">1. Reception Arrival / Select Doctor</span>
+        <div className="flex items-center justify-between min-w-[800px] text-[11px] font-bold text-slate-400">
+          <span className="flex items-center gap-1.5 text-blue-600">1. Reception Arrival</span>
           <span>→</span>
           <span className="flex items-center gap-1.5 text-indigo-600">2. Doctor Consultation & Exam</span>
           <span>→</span>
-          <span className="flex items-center gap-1.5 text-purple-600">3. Lab Test (If needed)</span>
+          <span className="flex items-center gap-1.5 text-purple-600">3. Lab Test ($3)</span>
           <span>→</span>
           <span className="flex items-center gap-1.5 text-teal-600">4. Dental Treatment</span>
           <span>→</span>
-          <span className="flex items-center gap-1.5 text-emerald-600">5. Final Bill & Receipt</span>
+          <span className="flex items-center gap-1.5 text-pink-600">5. Pharmacy & Prescriptions</span>
+          <span>→</span>
+          <span className="flex items-center gap-1.5 text-emerald-600">6. Cashier & Receipt</span>
         </div>
       </div>
 

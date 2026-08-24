@@ -3,6 +3,8 @@ import Visit from '../models/Visit.js';
 import Payment from '../models/Payment.js';
 import Invoice from '../models/Invoice.js';
 import LabRequest from '../models/LabRequest.js';
+import Prescription from '../models/Prescription.js';
+import Medicine from '../models/Medicine.js';
 
 export const generatePatientNumber = async () => {
   const count = await Patient.countDocuments();
@@ -37,3 +39,17 @@ export const generateLabRequestNumber = async () => {
   const nextNum = (count + 1).toString().padStart(4, '0');
   return `LAB-${year}-${nextNum}`;
 };
+
+export const generatePrescriptionNumber = async () => {
+  const year = new Date().getFullYear();
+  const count = await Prescription.countDocuments();
+  const nextNum = (count + 1).toString().padStart(4, '0');
+  return `RX-${year}-${nextNum}`;
+};
+
+export const generateMedicineCode = async () => {
+  const count = await Medicine.countDocuments();
+  const nextNum = (count + 1).toString().padStart(3, '0');
+  return `MED-${nextNum}`;
+};
+

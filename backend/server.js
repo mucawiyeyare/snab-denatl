@@ -26,6 +26,8 @@ import reportRoutes from './routes/report.routes.js';
 import auditLogRoutes from './routes/auditLog.routes.js';
 import settingRoutes from './routes/setting.routes.js';
 import inventoryRoutes from './routes/inventory.routes.js';
+import medicineRoutes from './routes/medicine.routes.js';
+import prescriptionRoutes from './routes/prescription.routes.js';
 
 dotenv.config();
 
@@ -78,6 +80,8 @@ app.use('/api/reports', reportRoutes);
 app.use('/api/audit-logs', auditLogRoutes);
 app.use('/api/settings', settingRoutes);
 app.use('/api/inventory', inventoryRoutes);
+app.use('/api/medicines', medicineRoutes);
+app.use('/api/prescriptions', prescriptionRoutes);
 
 // Fallback 404 handler
 app.use((req, res, next) => {

@@ -16,6 +16,7 @@ import TreatmentList from './pages/treatment/TreatmentList.jsx';
 import ServiceList from './pages/services/ServiceList.jsx';
 import DentalInventory from './pages/inventory/DentalInventory.jsx';
 import LabManager from './pages/lab/LabManager.jsx';
+import PharmacyManager from './pages/pharmacy/PharmacyManager.jsx';
 import BillingManager from './pages/billing/BillingManager.jsx';
 import PaymentList from './pages/payments/PaymentList.jsx';
 import AppointmentList from './pages/appointments/AppointmentList.jsx';
@@ -63,6 +64,9 @@ function App() {
           <Route path="/lab" element={<LabManager />} />
           <Route path="/lab/requests" element={<LabManager />} />
           <Route path="/lab/results" element={<LabManager />} />
+
+          {/* Pharmacy & Prescriptions */}
+          <Route path="/pharmacy" element={<PharmacyManager />} />
 
           {/* Billing & Payments */}
           <Route path="/billing" element={<BillingManager />} />

@@ -8,6 +8,7 @@ import Payment from '../models/Payment.js';
 import Followup from '../models/Followup.js';
 import Appointment from '../models/Appointment.js';
 import LabRequest from '../models/LabRequest.js';
+import Prescription from '../models/Prescription.js';
 import User from '../models/User.js';
 import { generatePatientNumber } from '../utils/generateId.js';
 import { logAudit } from '../middleware/audit.js';
@@ -262,7 +263,7 @@ export const getPatientHistory = async (req, res, next) => {
       }
     }
 
-    const [visits, consultations, treatments, labResults, invoices, payments, followups] = await Promise.all([
+    const [visits, consultations, treatments, labResults, invoices, payments, followups, prescriptions] = await Promise.all([
       Visit.find({ patient_id: patientId }).populate('doctor_id', 'full_name username').sort({ visit_date: -1 }),
       Consultation.find({ patient_id: patientId }).populate('doctor_id', 'full_name').sort({ consultation_date: -1 }),
       Treatment.find({ patient_id: patientId }).populate('doctor_id', 'full_name').populate('service_id').sort({ treatment_date: -1 }),
@@ -275,7 +276,11 @@ export const getPatientHistory = async (req, res, next) => {
         .populate('received_by', 'full_name username')
         .populate('invoice_id', 'invoice_number items')
         .sort({ payment_date: -1 }),
-      Followup.find({ patient_id: patientId }).populate('doctor_id', 'full_name').sort({ followup_date: -1 })
+      Followup.find({ patient_id: patientId }).populate('doctor_id', 'full_name').sort({ followup_date: -1 }),
+      Prescription.find({ patient_id: patientId })
+        .populate('doctor_id', 'full_name username')
+        .populate('visit_id', 'visit_number')
+        .sort({ createdAt: -1 })
     ]);
 
     res.json({
@@ -288,7 +293,8 @@ export const getPatientHistory = async (req, res, next) => {
         labResults,
         invoices,
         payments,
-        followups
+        followups,
+        prescriptions
       }
     });
   } catch (error) {

@@ -3,7 +3,7 @@ import mongoose from 'mongoose';
 const invoiceItemSchema = new mongoose.Schema({
   item_type: {
     type: String,
-    enum: ['Consultation', 'LabTest', 'Treatment', 'X-Ray', 'Other'],
+    enum: ['Consultation', 'LabTest', 'Treatment', 'Pharmacy', 'X-Ray', 'Other'],
     required: true
   },
   reference_id: {

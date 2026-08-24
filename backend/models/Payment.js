@@ -26,7 +26,7 @@ const paymentSchema = new mongoose.Schema({
   },
   payment_category: {
     type: String,
-    enum: ['Consultation Fee', 'Laboratory Fee', 'Dental Treatment', 'Final Bill / Consolidated', 'Partial Payment'],
+    enum: ['Consultation Fee', 'Laboratory Fee', 'Dental Treatment', 'Pharmacy Fee', 'Final Bill / Consolidated', 'Partial Payment'],
     default: 'Consultation Fee'
   },
   amount: {
