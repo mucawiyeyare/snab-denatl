@@ -73,6 +73,7 @@ const Sidebar = ({ isOpen, onClose, onOpenProfile }) => {
       { label: 'Dental Treatments', path: '/treatments', icon: HeartPulse },
       { label: 'Dental Services', path: '/services', icon: Sparkles },
       { label: 'Billing & Invoices', path: '/billing', icon: CreditCard },
+      { label: 'Cashier & Receipts', path: '/payments', icon: Receipt },
       { label: 'Pharmacy & Medicines', path: '/pharmacy', icon: Pill },
       { label: 'Laboratory', path: '/lab', icon: TestTube2 },
       { label: 'Dental Inventory', path: '/inventory', icon: Boxes },
