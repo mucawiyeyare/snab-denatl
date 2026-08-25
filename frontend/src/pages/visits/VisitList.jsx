@@ -587,10 +587,10 @@ const VisitList = () => {
             No visits match your current filters.
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs text-left">
+          <div className="dental-table-container">
+            <table className="dental-table">
               <thead>
-                <tr className="bg-slate-50/80 border-b border-slate-100 text-slate-500 font-bold uppercase tracking-wider">
+                <tr>
                   <th className="py-3.5 px-6">Visit #</th>
                   <th className="py-3.5 px-4">Patient</th>
                   <th className="py-3.5 px-4">Doctor</th>
@@ -599,7 +599,7 @@ const VisitList = () => {
                   <th className="py-3.5 px-6 text-right">Workflow Action</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100 font-medium">
+              <tbody>
                 {visits.map((v) => {
                   const status = v.status;
                   const patient = v.patient_id || {};

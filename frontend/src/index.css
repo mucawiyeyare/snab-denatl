@@ -83,3 +83,71 @@
 ::-webkit-scrollbar-thumb:hover {
   background: #94a3b8;
 }
+
+/* ========================================================================= */
+/* Modern Blue & White Responsive Table System (Reference Design)            */
+/* ========================================================================= */
+
+.dental-table-container {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  background-color: #ffffff;
+  border-radius: 1rem;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05);
+}
+
+.dental-table {
+  width: 100%;
+  text-align: left;
+  border-collapse: collapse;
+  font-size: 0.8125rem;
+}
+
+.dental-table thead tr {
+  background: linear-gradient(135deg, #1d4ed8 0%, #2563eb 100%) !important;
+  color: #ffffff !important;
+}
+
+.dental-table thead th {
+  padding: 0.875rem 1rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-size: 0.7rem;
+  color: #ffffff !important;
+  border-bottom: 2px solid #1e40af;
+  white-space: nowrap;
+}
+
+.dental-table tbody tr {
+  border-bottom: 1px solid #f1f5f9;
+  transition: all 0.15s ease-in-out;
+}
+
+.dental-table tbody tr:nth-child(even) {
+  background-color: #f8fafc;
+}
+
+.dental-table tbody tr:hover {
+  background-color: #eff6ff !important;
+}
+
+.dental-table tbody td {
+  padding: 0.875rem 1rem;
+  color: #1e293b;
+  vertical-align: middle;
+}
+
+.dental-table tfoot tr {
+  background-color: #f1f5f9;
+  border-top: 2px solid #cbd5e1;
+  font-weight: 800;
+}
+
+.dental-table tfoot td {
+  padding: 0.875rem 1rem;
+  font-size: 0.8125rem;
+  color: #0f172a;
+}

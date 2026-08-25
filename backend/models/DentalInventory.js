@@ -13,18 +13,8 @@ const dentalInventorySchema = new mongoose.Schema({
   },
   category: {
     type: String,
-    required: true,
-    enum: [
-      'Dental Materials & Composites',
-      'Orthodontic Supplies',
-      'Surgical Instruments & Burs',
-      'Anesthetics & Pharmaceuticals',
-      'Diagnostic & X-Ray Supplies',
-      'PPE & Sterilization',
-      'Prosthodontic & Impression',
-      'Equipment & Handpieces',
-      'General Consumables'
-    ],
+    required: [true, 'Category is required'],
+    trim: true,
     default: 'Dental Materials & Composites'
   },
   quantity_purchased: {
@@ -85,7 +75,7 @@ const dentalInventorySchema = new mongoose.Schema({
 }, { timestamps: true });
 
 // Pre-save hook to calculate total cost and available stock & status
-dentalInventorySchema.pre('save', function (next) {
+dentalInventorySchema.pre('save', function () {
   this.total_purchase_cost = (this.quantity_purchased || 0) * (this.unit_price || 0);
   this.quantity_available = Math.max(0, (this.quantity_purchased || 0) - (this.quantity_used || 0));
 
@@ -99,8 +89,6 @@ dentalInventorySchema.pre('save', function (next) {
   } else {
     this.status = 'In Stock';
   }
-
-  next();
 });
 
 export default mongoose.model('DentalInventory', dentalInventorySchema);

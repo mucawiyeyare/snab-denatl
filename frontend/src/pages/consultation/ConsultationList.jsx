@@ -59,10 +59,10 @@ const ConsultationList = () => {
             No consultation records found.
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs text-left">
+          <div className="dental-table-container">
+            <table className="dental-table">
               <thead>
-                <tr className="bg-slate-50/80 border-b border-slate-100 text-slate-500 font-bold uppercase">
+                <tr>
                   <th className="py-3.5 px-6">Date</th>
                   <th className="py-3.5 px-4">Patient</th>
                   <th className="py-3.5 px-4">Consulting Doctor</th>
@@ -71,7 +71,7 @@ const ConsultationList = () => {
                   <th className="py-3.5 px-6">Clinical Observations</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100 font-medium">
+              <tbody>
                 {filtered.map(c => (
                   <tr key={c._id} className="hover:bg-slate-50/80 transition">
                     <td className="py-4 px-6 text-slate-500 font-mono">

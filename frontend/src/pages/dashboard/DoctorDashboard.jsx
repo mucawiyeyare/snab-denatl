@@ -713,10 +713,10 @@ const DoctorDashboard = () => {
             <p className="text-[11px] text-slate-400 mt-0.5">Patients you attend will appear in this list.</p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs text-left">
+          <div className="dental-table-container">
+            <table className="dental-table">
               <thead>
-                <tr className="bg-slate-50/80 border-b border-slate-100 text-slate-500 font-bold uppercase tracking-wider text-[11px]">
+                <tr>
                   <th className="py-3 px-4">Patient</th>
                   <th className="py-3 px-4">Patient ID</th>
                   <th className="py-3 px-4">Visit Date & Time</th>
@@ -725,7 +725,7 @@ const DoctorDashboard = () => {
                   <th className="py-3 px-4 text-right">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100 font-medium">
+              <tbody>
                 {filteredRecentPatients.map((visit) => {
                   const patient = visit.patient_id;
                   return (

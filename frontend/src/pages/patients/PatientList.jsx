@@ -418,10 +418,10 @@ const PatientList = () => {
                 </p>
               </div>
             ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-xs text-left">
+              <div className="dental-table-container">
+                <table className="dental-table">
                   <thead>
-                    <tr className="bg-slate-50/80 border-b border-slate-100 text-slate-500 font-bold uppercase tracking-wider">
+                    <tr>
                       <th className="py-3 px-5">Patient ID</th>
                       <th className="py-3 px-4">Full Name</th>
                       <th className="py-3 px-4">Telephone</th>
@@ -430,7 +430,7 @@ const PatientList = () => {
                       <th className="py-3 px-5 text-right">Actions</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-100 font-medium">
+                  <tbody>
                     {patients.map((p) => {
                       const hasAllergies = p.medical_info?.allergies?.length > 0;
                       const isPregnant = p.medical_info?.pregnant;

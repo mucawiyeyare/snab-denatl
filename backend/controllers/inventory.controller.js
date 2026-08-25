@@ -1,4 +1,5 @@
 import DentalInventory from '../models/DentalInventory.js';
+import DentalCategory from '../models/DentalCategory.js';
 import { logAudit } from '../middleware/audit.js';
 
 export const getInventory = async (req, res, next) => {
@@ -186,6 +187,126 @@ export const deleteInventoryItem = async (req, res, next) => {
     });
 
     res.json({ success: true, message: 'Inventory item deleted successfully' });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// ─────────────────────────────────────────────────────────────
+// DENTAL CATEGORY CRUD CONTROLLERS (Doctor & Admin)
+// ─────────────────────────────────────────────────────────────
+
+export const getCategories = async (req, res, next) => {
+  try {
+    let categories = await DentalCategory.find({}).sort({ name: 1 });
+    if (categories.length === 0) {
+      const defaultCategories = [
+        'Dental Materials & Composites',
+        'Orthodontic Supplies',
+        'Surgical Instruments & Burs',
+        'Anesthetics & Pharmaceuticals',
+        'Diagnostic & X-Ray Supplies',
+        'PPE & Sterilization',
+        'Prosthodontic & Impression',
+        'Equipment & Handpieces',
+        'General Consumables'
+      ];
+      await DentalCategory.insertMany(defaultCategories.map(name => ({ name })));
+      categories = await DentalCategory.find({}).sort({ name: 1 });
+    }
+    res.json({ success: true, count: categories.length, data: categories });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const createCategory = async (req, res, next) => {
+  try {
+    const { name, description } = req.body;
+    if (!name || !name.trim()) {
+      return res.status(400).json({ success: false, message: 'Category name is required' });
+    }
+
+    const existing = await DentalCategory.findOne({ name: { $regex: new RegExp(`^${name.trim()}$`, 'i') } });
+    if (existing) {
+      return res.status(400).json({ success: false, message: 'A category with this name already exists' });
+    }
+
+    const category = await DentalCategory.create({
+      name: name.trim(),
+      description: description?.trim() || '',
+      created_by: req.user?._id
+    });
+
+    await logAudit({
+      user: req.user,
+      action: 'CREATE_INVENTORY_CATEGORY',
+      entity: 'DentalCategory',
+      entity_id: category._id,
+      details: { name: category.name }
+    });
+
+    res.status(201).json({ success: true, data: category });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const updateCategory = async (req, res, next) => {
+  try {
+    const { name, description } = req.body;
+    const category = await DentalCategory.findById(req.params.id);
+    if (!category) {
+      return res.status(404).json({ success: false, message: 'Category not found' });
+    }
+
+    const oldName = category.name;
+    if (name && name.trim()) {
+      category.name = name.trim();
+    }
+    if (description !== undefined) {
+      category.description = description.trim();
+    }
+
+    await category.save();
+
+    // If name changed, update items in inventory with oldName
+    if (oldName !== category.name) {
+      await DentalInventory.updateMany({ category: oldName }, { category: category.name });
+    }
+
+    await logAudit({
+      user: req.user,
+      action: 'UPDATE_INVENTORY_CATEGORY',
+      entity: 'DentalCategory',
+      entity_id: category._id,
+      details: { oldName, newName: category.name }
+    });
+
+    res.json({ success: true, data: category });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const deleteCategory = async (req, res, next) => {
+  try {
+    const category = await DentalCategory.findById(req.params.id);
+    if (!category) {
+      return res.status(404).json({ success: false, message: 'Category not found' });
+    }
+
+    await DentalCategory.findByIdAndDelete(req.params.id);
+
+    await logAudit({
+      user: req.user,
+      action: 'DELETE_INVENTORY_CATEGORY',
+      entity: 'DentalCategory',
+      entity_id: req.params.id,
+      details: { name: category.name }
+    });
+
+    res.json({ success: true, message: 'Category deleted successfully' });
   } catch (error) {
     next(error);
   }

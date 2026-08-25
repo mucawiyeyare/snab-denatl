@@ -9,7 +9,8 @@ import {
   createPrescriptionApi,
   dispensePrescriptionApi,
   getPharmacyReportsApi,
-  getVisitsApi
+  getVisitsApi,
+  getPatientsApi
 } from '../../api/endpoints.js';
 import StatusBadge from '../../components/ui/StatusBadge.jsx';
 import Modal from '../../components/ui/Modal.jsx';
@@ -44,7 +45,8 @@ import {
   Flame,
   Check,
   X,
-  User
+  User,
+  ClipboardList
 } from 'lucide-react';
 
 const COMMON_PRESETS = [
@@ -247,7 +249,9 @@ const PharmacyManager = () => {
   const [medicines, setMedicines] = useState([]);
   const [prescriptions, setPrescriptions] = useState([]);
   const [activeVisits, setActiveVisits] = useState([]);
+  const [allPatients, setAllPatients] = useState([]);
   const [reportsData, setReportsData] = useState(null);
+  const [recentPatients, setRecentPatients] = useState([]); // for quick-select chips
 
   // Modals
   const [isMedicineModalOpen, setIsMedicineModalOpen] = useState(false);
@@ -258,9 +262,11 @@ const PharmacyManager = () => {
   const [isDispenseModalOpen, setIsDispenseModalOpen] = useState(false);
   const [isPrintPrescriptionOpen, setIsPrintPrescriptionOpen] = useState(false);
   const [isReceiptModalOpen, setIsReceiptModalOpen] = useState(false);
+  const [isRecordOnlySlipOpen, setIsRecordOnlySlipOpen] = useState(false);
 
   const [selectedPrescription, setSelectedPrescription] = useState(null);
   const [currentPayment, setCurrentPayment] = useState(null);
+  const [recordOnlyPrescription, setRecordOnlyPrescription] = useState(null);
 
   // Medicine Form State
   const [medicineForm, setMedicineForm] = useState({
@@ -305,6 +311,8 @@ const PharmacyManager = () => {
 
   // Cashier Dispensing Form State
   const [dispenseItems, setDispenseItems] = useState([]);
+  const [dispenseDiscount, setDispenseDiscount] = useState(0);
+  const [dispensePaidAmount, setDispensePaidAmount] = useState('');
   const [dispensePaymentMethod, setDispensePaymentMethod] = useState('Cash');
   const [dispenseNotes, setDispenseNotes] = useState('');
 
@@ -322,20 +330,52 @@ const PharmacyManager = () => {
   const fetchPharmacyData = async () => {
     setLoading(true);
     try {
-      const [medRes, rxRes, visitRes, reportRes] = await Promise.all([
+      const [medRes, rxRes, visitRes, reportRes, patientRes] = await Promise.all([
         getMedicinesApi({
           category: categoryFilter || undefined,
           low_stock: stockFilter === 'low' ? 'true' : undefined,
           expiring_soon: stockFilter === 'expiring' ? 'true' : undefined
         }),
         getPrescriptionsApi(),
-        getVisitsApi({ today: 'true' }).catch(() => ({ data: { data: [] } })),
-        getPharmacyReportsApi().catch(() => ({ data: { data: null } }))
+        // Load all visits so all patients with visits can be selected
+        getVisitsApi({ limit: 1000 }).catch(() => ({ data: { data: [] } })),
+        getPharmacyReportsApi().catch(() => ({ data: { data: null } })),
+        // Load all registered patients so ANY patient can be searched & selected
+        getPatientsApi({ limit: 1000 }).catch(() => ({ data: { data: [] } }))
       ]);
-      setMedicines(medRes.data?.data || []);
-      setPrescriptions(rxRes.data?.data || []);
-      setActiveVisits(visitRes.data?.data || []);
+      const fetchedMedicines = medRes.data?.data || [];
+      const fetchedPrescriptions = rxRes.data?.data || [];
+      const fetchedVisits = visitRes.data?.data || [];
+      const fetchedPatients = patientRes.data?.data || [];
+
+      setMedicines(fetchedMedicines);
+      setPrescriptions(fetchedPrescriptions);
+      setActiveVisits(fetchedVisits);
       setReportsData(reportRes.data?.data || null);
+      setAllPatients(fetchedPatients);
+
+      // Last patients treated/visited by doctor or recently registered
+      const recentList = [];
+      const seenIds = new Set();
+
+      // First prioritize patients from visits (last treated/seen)
+      fetchedVisits.forEach(v => {
+        const pt = v.patient_id;
+        if (pt && typeof pt === 'object' && pt._id && !seenIds.has(String(pt._id))) {
+          seenIds.add(String(pt._id));
+          recentList.push(pt);
+        }
+      });
+
+      // Then add any other recent patients
+      fetchedPatients.forEach(pt => {
+        if (pt?._id && !seenIds.has(String(pt._id))) {
+          seenIds.add(String(pt._id));
+          recentList.push(pt);
+        }
+      });
+
+      setRecentPatients(recentList.slice(0, 8));
     } catch (err) {
       console.error('Error fetching pharmacy data:', err);
     } finally {
@@ -427,9 +467,8 @@ const PharmacyManager = () => {
 
   // --- Doctor Prescribing Actions ---
   const handleOpenPrescribeModal = () => {
-    const defaultVisit = activeVisits[0];
-    setPrescribeVisitId(defaultVisit?._id || '');
-    setSelectedVisitPatient(defaultVisit?.patient_id || null);
+    setPrescribeVisitId('');
+    setSelectedVisitPatient(null);
     setPrescribeItems([
       {
         medicine_id: '',
@@ -452,30 +491,90 @@ const PharmacyManager = () => {
     setIsPrescribeModalOpen(true);
   };
 
-  const handleVisitChange = (vId) => {
+  const handleVisitChange = (vId, option) => {
     setPrescribeVisitId(vId);
+    if (option?.patient) {
+      setSelectedVisitPatient(option.patient);
+      return;
+    }
     const matchedVisit = activeVisits.find(v => v._id === vId);
-    setSelectedVisitPatient(matchedVisit?.patient_id || null);
+    if (matchedVisit?.patient_id) {
+      setSelectedVisitPatient(matchedVisit.patient_id);
+      return;
+    }
+    const cleanId = String(vId).replace('patient_', '');
+    const matchedPatient = allPatients.find(p => String(p._id) === cleanId);
+    setSelectedVisitPatient(matchedPatient || null);
   };
 
+  // Build unified patient search list combining all patients and active visits
+  const patientSelectOptions = React.useMemo(() => {
+    const map = new Map();
+
+    allPatients.forEach(p => {
+      map.set(String(p._id), {
+        patient: p,
+        visit: null
+      });
+    });
+
+    activeVisits.forEach(v => {
+      const pId = String(v.patient_id?._id || v.patient_id);
+      if (map.has(pId)) {
+        map.get(pId).visit = v;
+      } else if (v.patient_id && typeof v.patient_id === 'object') {
+        map.set(pId, {
+          patient: v.patient_id,
+          visit: v
+        });
+      }
+    });
+
+    return Array.from(map.values()).map(({ patient, visit }) => {
+      const pName = patient.name || 'Unknown Patient';
+      const pNum = patient.patient_number || '';
+      const pPhone = patient.telephone || '';
+      const vNum = visit?.visit_number ? `Visit ${visit.visit_number}` : 'Patient';
+      const val = visit?._id ? visit._id : `patient_${patient._id}`;
+
+      return {
+        value: val,
+        patientId: patient._id,
+        visitId: visit?._id || '',
+        patient,
+        visit,
+        label: pName,
+        sublabel: `${pNum ? pNum + ' • ' : ''}${pPhone}`,
+        badge: vNum,
+        searchKeywords: `${pName} ${pPhone} ${pNum} ${visit?.visit_number || ''}`
+      };
+    });
+  }, [allPatients, activeVisits]);
+
   const handleAddPresetItem = (preset) => {
-    const matchedMed = medicines.find(m => m.name.toLowerCase() === preset.medicine_name.toLowerCase());
+    const cleanPreset = preset.medicine_name.split('(')[0].toLowerCase().trim();
+    const matchedMed = medicines.find(m => 
+      m.name.toLowerCase() === preset.medicine_name.toLowerCase() ||
+      m.name.toLowerCase().includes(cleanPreset) ||
+      cleanPreset.includes(m.name.toLowerCase()) ||
+      (m.generic_name && m.generic_name.toLowerCase().includes(cleanPreset))
+    );
     setPrescribeItems([
       ...prescribeItems,
       {
         medicine_id: matchedMed?._id || '',
-        medicine_name: preset.medicine_name,
-        dosage: preset.dosage,
+        medicine_name: matchedMed?.name || preset.medicine_name,
+        dosage: matchedMed?.strength || preset.dosage,
         frequency: preset.frequency,
         duration: preset.duration,
         quantity: preset.quantity,
         unit_price: matchedMed?.unit_price !== undefined ? matchedMed.unit_price : preset.unit_price,
-        instructions: preset.instructions,
+        instructions: matchedMed?.instructions_default || preset.instructions,
         food_relation: preset.food_relation || 'After Meals',
         prn: Boolean(preset.prn),
         prn_reason: preset.prn_reason || '',
-        route: preset.route || 'Oral',
-        is_injection: Boolean(preset.is_injection),
+        route: matchedMed?.route_of_administration || preset.route || 'Oral',
+        is_injection: Boolean(preset.is_injection || matchedMed?.is_injection),
         injection_details: preset.is_injection ? 'Deep IM / Dental infiltration' : ''
       }
     ]);
@@ -514,10 +613,10 @@ const PharmacyManager = () => {
     return null;
   };
 
-  const submitPrescription = async (e) => {
+  const submitPrescription = async (e, destination = 'cashier') => {
     e.preventDefault();
-    if (!prescribeVisitId) {
-      alert('Please select an active patient visit');
+    if (!prescribeVisitId && !selectedVisitPatient) {
+      alert('Please select a patient to prescribe for');
       return;
     }
     const validItems = prescribeItems.filter(it => it.medicine_name && it.medicine_name.trim());
@@ -529,9 +628,11 @@ const PharmacyManager = () => {
     setSubmitting(true);
     try {
       const res = await createPrescriptionApi({
-        visit_id: prescribeVisitId,
+        visit_id: prescribeVisitId && !String(prescribeVisitId).startsWith('patient_') ? prescribeVisitId : undefined,
+        patient_id: selectedVisitPatient?._id || (String(prescribeVisitId).startsWith('patient_') ? String(prescribeVisitId).replace('patient_', '') : undefined),
         items: validItems,
-        notes: prescribeNotes
+        notes: prescribeNotes,
+        destination
       });
       setIsPrescribeModalOpen(false);
       fetchPharmacyData();
@@ -539,7 +640,15 @@ const PharmacyManager = () => {
       if (res.data?.allergy_warnings && res.data.allergy_warnings.length > 0) {
         alert(res.data.allergy_warnings.join('\n'));
       }
-      showToast('Prescription written and sent to Pharmacy / Cashier Queue!');
+
+      if (destination === 'record_only') {
+        // Open the prescription-only slip — shows medicines only, no amount, no cashier
+        setRecordOnlyPrescription(res.data?.data);
+        setIsRecordOnlySlipOpen(true);
+        showToast('Prescription saved to patient record!');
+      } else {
+        showToast('Prescription written and sent to Pharmacy / Cashier Queue!');
+      }
     } catch (err) {
       console.error('Error creating prescription:', err);
       alert(err.response?.data?.message || 'Error creating prescription');
@@ -551,7 +660,7 @@ const PharmacyManager = () => {
   // --- Cashier Dispensing & Checkout ---
   const handleOpenDispenseModal = (rx) => {
     setSelectedPrescription(rx);
-    setDispenseItems(rx.items.map(it => ({
+    const mappedItems = rx.items.map(it => ({
       item_id: it._id,
       medicine_name: it.medicine_name,
       dosage: it.dosage,
@@ -564,7 +673,11 @@ const PharmacyManager = () => {
       prn: it.prn,
       is_injection: it.is_injection,
       purchased: it.status !== 'Declined / External' && it.status !== 'Dispensed'
-    })));
+    }));
+    setDispenseItems(mappedItems);
+    const initialSubtotal = mappedItems.filter(it => it.purchased).reduce((acc, it) => acc + (parseFloat(it.total_price) || 0), 0);
+    setDispenseDiscount(0);
+    setDispensePaidAmount(initialSubtotal);
     setDispensePaymentMethod('Cash');
     setDispenseNotes('');
     setIsDispenseModalOpen(true);
@@ -574,10 +687,17 @@ const PharmacyManager = () => {
     e.preventDefault();
     if (!selectedPrescription) return;
 
+    const discountVal = Math.max(0, parseFloat(dispenseDiscount) || 0);
+    const subtotalVal = dispenseItems.filter(it => it.purchased).reduce((acc, it) => acc + (parseFloat(it.total_price) || 0), 0);
+    const netPayable = Math.max(0, subtotalVal - discountVal);
+    const paidVal = dispensePaidAmount === '' ? netPayable : Math.max(0, parseFloat(dispensePaidAmount) || 0);
+
     setSubmitting(true);
     try {
       const res = await dispensePrescriptionApi(selectedPrescription._id, {
         items_to_purchase: dispenseItems,
+        discount: discountVal,
+        paid_amount: paidVal,
         payment_method: dispensePaymentMethod,
         notes: dispenseNotes
       });
@@ -589,7 +709,7 @@ const PharmacyManager = () => {
         setCurrentPayment(res.data.data.payment);
         setIsReceiptModalOpen(true);
       }
-      showToast(`Prescription dispensed, stock deducted, and receipt issued!`);
+      showToast(`Prescription dispensed, stock deducted, and payment recorded!`);
     } catch (err) {
       console.error('Error dispensing prescription:', err);
       alert(err.response?.data?.message || 'Error processing dispensing');
@@ -987,9 +1107,9 @@ const PharmacyManager = () => {
             </div>
 
             {/* Table */}
-            <div className="overflow-x-auto rounded-2xl border border-slate-200">
-              <table className="w-full text-xs text-left">
-                <thead className="bg-slate-50 text-slate-600 font-bold uppercase text-[10px] tracking-wider border-b border-slate-200">
+            <div className="dental-table-container">
+              <table className="dental-table">
+                <thead>
                   <tr>
                     <th className="py-3 px-4">Code</th>
                     <th className="py-3 px-4">Medicine & Generic</th>
@@ -1002,7 +1122,7 @@ const PharmacyManager = () => {
                     {isAdmin && <th className="py-3 px-4 text-right">Actions</th>}
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100">
+                <tbody>
                   {filteredMedicines.length === 0 ? (
                     <tr>
                       <td colSpan={isAdmin ? 9 : 8} className="text-center py-8 text-slate-400">
@@ -1466,9 +1586,47 @@ const PharmacyManager = () => {
         subtitle="Prescribe with dose, frequency, duration, PRN, food relation, and clinical allergy check."
         maxWidth="max-w-3xl"
       >
-        <form onSubmit={submitPrescription} className="space-y-4 text-xs">
+        <form onSubmit={(e) => e.preventDefault()} className="space-y-4 text-xs">
           
-          {/* Select Active Patient Visit */}
+          {/* Recent Patients Quick-Select */}
+          {recentPatients.length > 0 && (
+            <div>
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1.5">
+                Recent Patients / Last Treated:
+              </span>
+              <div className="flex flex-wrap gap-1.5">
+                {recentPatients.map((pt) => {
+                  const visit = activeVisits.find(v => (v.patient_id?._id || v.patient_id) === pt._id);
+                  const optVal = visit?._id || `patient_${pt._id}`;
+                  const isSelected = prescribeVisitId === optVal;
+
+                  return (
+                    <button
+                      key={pt._id}
+                      type="button"
+                      onClick={() => handleVisitChange(optVal, { patient: pt, visit })}
+                      title={`Select ${pt.name}`}
+                      className={`px-2.5 py-1 rounded-xl text-[10px] font-bold border transition cursor-pointer flex items-center gap-1.5 ${
+                        isSelected
+                          ? 'bg-purple-600 text-white border-purple-600 shadow-xs'
+                          : 'bg-slate-50 hover:bg-purple-50 text-slate-700 border-slate-200 hover:border-purple-300'
+                      }`}
+                    >
+                      <User className={`w-3 h-3 ${isSelected ? 'text-white' : 'text-purple-600'}`} />
+                      <span>{pt.name}</span>
+                      {pt.telephone && (
+                        <span className={`text-[9px] font-mono ${isSelected ? 'text-purple-200' : 'text-slate-400'}`}>
+                          {pt.telephone}
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Select Patient & Active Visit */}
           <div>
             <SearchableSelect
               label="Select Patient & Active Visit *"
@@ -1478,12 +1636,7 @@ const PharmacyManager = () => {
               searchPlaceholder="Search by patient name, phone, or visit number..."
               value={prescribeVisitId}
               onChange={handleVisitChange}
-              options={activeVisits.map((v) => ({
-                value: v._id,
-                label: v.patient_id?.name || 'Patient',
-                sublabel: `${v.patient_id?.patient_number || ''} • ${v.patient_id?.telephone || ''}`,
-                badge: `Visit ${v.visit_number}`
-              }))}
+              options={patientSelectOptions}
             />
           </div>
 
@@ -1786,7 +1939,7 @@ const PharmacyManager = () => {
             />
           </div>
 
-          <div className="flex justify-end gap-2 pt-3 border-t border-slate-100">
+          <div className="flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-2 pt-3 border-t border-slate-100">
             <button
               type="button"
               onClick={() => setIsPrescribeModalOpen(false)}
@@ -1794,14 +1947,36 @@ const PharmacyManager = () => {
             >
               Cancel
             </button>
-            <button
-              type="submit"
-              disabled={submitting}
-              className="px-5 py-2 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-xl text-xs shadow-md transition cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
-            >
-              <Send className="w-3.5 h-3.5" />
-              <span>{submitting ? 'Sending...' : 'Send Prescription to Pharmacy / Cashier'}</span>
-            </button>
+
+            <div className="flex flex-col sm:flex-row gap-2">
+              {/* Save to patient record only — no cashier queue, no money */}
+              <button
+                type="button"
+                disabled={submitting}
+                onClick={(e) => submitPrescription(e, 'record_only')}
+                className="px-4 py-2 border-2 border-purple-400 text-purple-700 hover:bg-purple-50 font-bold rounded-xl text-xs transition cursor-pointer flex flex-col items-center justify-center disabled:opacity-50"
+              >
+                <div className="flex items-center gap-1.5">
+                  <ClipboardList className="w-3.5 h-3.5" />
+                  <span>{submitting ? 'Saving...' : 'Save to Patient Record'}</span>
+                </div>
+                <span className="text-[9px] font-normal text-purple-600 mt-0.5">Patient buys externally • $0.00 bill</span>
+              </button>
+
+              {/* Send to cashier queue for dispensing & payment */}
+              <button
+                type="button"
+                disabled={submitting}
+                onClick={(e) => submitPrescription(e, 'cashier')}
+                className="px-5 py-2 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-xl text-xs shadow-md transition cursor-pointer flex flex-col items-center justify-center disabled:opacity-50"
+              >
+                <div className="flex items-center gap-1.5">
+                  <Send className="w-3.5 h-3.5" />
+                  <span>{submitting ? 'Sending...' : 'Send to Cashier'}</span>
+                </div>
+                <span className="text-[9px] font-normal text-purple-200 mt-0.5">Bill through facility • Add to invoice</span>
+              </button>
+            </div>
           </div>
         </form>
       </Modal>
@@ -1886,18 +2061,173 @@ const PharmacyManager = () => {
             </div>
           </div>
 
-          {/* Calculated Grand Total for Chosen Medicines */}
-          <div className="p-3.5 bg-slate-900 text-white rounded-2xl flex justify-between items-center">
-            <div>
-              <span className="text-[10px] uppercase font-bold text-slate-400">Total Pharmacy Charge</span>
-              <p className="text-[11px] text-slate-300">
-                {dispenseItems.filter(it => it.purchased).length} of {dispenseItems.length} items purchased
-              </p>
-            </div>
-            <span className="font-mono text-xl font-black text-emerald-400">
-              ${dispenseItems.filter(it => it.purchased).reduce((acc, it) => acc + (parseFloat(it.total_price) || 0), 0).toFixed(2)}
-            </span>
-          </div>
+          {/* Subtotal, Discount & Partial Payment Controls */}
+          {(() => {
+            const subtotal = dispenseItems.filter(it => it.purchased).reduce((acc, it) => acc + (parseFloat(it.total_price) || 0), 0);
+            const discountVal = Math.max(0, parseFloat(dispenseDiscount) || 0);
+            const netPayable = Math.max(0, subtotal - discountVal);
+            const paidVal = dispensePaidAmount === '' ? '' : (parseFloat(dispensePaidAmount) >= 0 ? parseFloat(dispensePaidAmount) : 0);
+            const effectivePaid = paidVal === '' ? netPayable : Math.min(netPayable, paidVal);
+            const balanceDue = Math.max(0, netPayable - (paidVal === '' ? netPayable : paidVal));
+
+            return (
+              <div className="space-y-3">
+                {/* Discount & Paying Now Input Grid */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3.5 bg-slate-50 border border-slate-200 rounded-2xl">
+                  {/* Discount Field */}
+                  <div>
+                    <div className="flex justify-between items-center mb-1">
+                      <label className="text-[11px] font-bold text-slate-700">Special Discount ($):</label>
+                      {discountVal > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setDispenseDiscount(0);
+                            setDispensePaidAmount(subtotal);
+                          }}
+                          className="text-[10px] text-rose-500 hover:underline font-bold cursor-pointer"
+                        >
+                          Clear
+                        </button>
+                      )}
+                    </div>
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-bold">$</span>
+                      <input
+                        type="number"
+                        min="0"
+                        max={subtotal}
+                        step="0.5"
+                        value={dispenseDiscount}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setDispenseDiscount(val);
+                          const d = Math.max(0, parseFloat(val) || 0);
+                          const newNet = Math.max(0, subtotal - d);
+                          setDispensePaidAmount(newNet);
+                        }}
+                        placeholder="0.00"
+                        className="w-full pl-7 pr-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-mono font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-purple-500"
+                      />
+                    </div>
+                    {/* Quick discount chips */}
+                    <div className="flex gap-1.5 mt-1.5 flex-wrap">
+                      {[5, 10, 20].map((d) => (
+                        <button
+                          key={d}
+                          type="button"
+                          onClick={() => {
+                            setDispenseDiscount(d);
+                            setDispensePaidAmount(Math.max(0, subtotal - d));
+                          }}
+                          className="px-2 py-0.5 bg-purple-50 hover:bg-purple-100 text-purple-700 rounded-md text-[10px] font-bold border border-purple-200 transition cursor-pointer"
+                        >
+                          -${d}
+                        </button>
+                      ))}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const d = Math.round(subtotal * 0.1);
+                          setDispenseDiscount(d);
+                          setDispensePaidAmount(Math.max(0, subtotal - d));
+                        }}
+                        className="px-2 py-0.5 bg-amber-50 hover:bg-amber-100 text-amber-800 rounded-md text-[10px] font-bold border border-amber-200 transition cursor-pointer"
+                      >
+                        10% Off
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Amount Paying Now (Partial Payment) Field */}
+                  <div>
+                    <div className="flex justify-between items-center mb-1">
+                      <label className="text-[11px] font-bold text-slate-700">Amount Paying Now ($):</label>
+                      <span className={`text-[10px] font-bold ${balanceDue > 0 ? 'text-amber-600' : 'text-emerald-600'}`}>
+                        {balanceDue > 0 ? `Partial (Balance: $${balanceDue.toFixed(2)})` : 'Full Payment'}
+                      </span>
+                    </div>
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-bold">$</span>
+                      <input
+                        type="number"
+                        min="0"
+                        max={netPayable}
+                        step="0.5"
+                        value={dispensePaidAmount}
+                        onChange={(e) => setDispensePaidAmount(e.target.value)}
+                        placeholder={netPayable.toFixed(2)}
+                        className="w-full pl-7 pr-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-mono font-bold text-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                      />
+                    </div>
+                    {/* Quick payment chips */}
+                    <div className="flex gap-1.5 mt-1.5 flex-wrap">
+                      <button
+                        type="button"
+                        onClick={() => setDispensePaidAmount(netPayable)}
+                        className="px-2 py-0.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 rounded-md text-[10px] font-bold border border-emerald-200 transition cursor-pointer"
+                      >
+                        Full (${netPayable.toFixed(0)})
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setDispensePaidAmount(Number((netPayable / 2).toFixed(2)))}
+                        className="px-2 py-0.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-md text-[10px] font-bold border border-slate-200 transition cursor-pointer"
+                      >
+                        50% (${(netPayable / 2).toFixed(0)})
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setDispensePaidAmount(0)}
+                        className="px-2 py-0.5 bg-rose-50 hover:bg-rose-100 text-rose-700 rounded-md text-[10px] font-bold border border-rose-200 transition cursor-pointer"
+                      >
+                        $0 (Bill Later)
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Financial Summary Banner */}
+                <div className="p-3.5 bg-slate-900 text-white rounded-2xl space-y-1.5">
+                  <div className="flex justify-between items-center text-xs">
+                    <span className="text-slate-400">Medications Subtotal ({dispenseItems.filter(it => it.purchased).length} items):</span>
+                    <span className="font-mono font-bold">${subtotal.toFixed(2)}</span>
+                  </div>
+
+                  {discountVal > 0 && (
+                    <div className="flex justify-between items-center text-xs text-emerald-400 font-bold">
+                      <span>Discount Approved:</span>
+                      <span className="font-mono">-${discountVal.toFixed(2)}</span>
+                    </div>
+                  )}
+
+                  <div className="flex justify-between items-center pt-1.5 border-t border-slate-800 text-xs font-bold text-slate-200">
+                    <span>Net Pharmacy Charge:</span>
+                    <span className="font-mono font-bold text-white">${netPayable.toFixed(2)}</span>
+                  </div>
+
+                  <div className="flex justify-between items-center pt-1 border-t border-slate-800">
+                    <div>
+                      <span className="text-[10px] uppercase font-bold text-slate-400 block">Amount Paying Now</span>
+                      <span className="text-[10px] text-slate-400">
+                        {balanceDue > 0 ? '⚠️ Partial Payment' : '✅ Full Payment'}
+                      </span>
+                    </div>
+                    <span className="font-mono text-xl font-black text-emerald-400">
+                      ${(paidVal === '' ? netPayable : effectivePaid).toFixed(2)}
+                    </span>
+                  </div>
+
+                  {balanceDue > 0 && (
+                    <div className="flex justify-between items-center pt-1 text-xs text-amber-300 font-bold bg-amber-950/50 p-2 rounded-xl border border-amber-800/60">
+                      <span>Remaining Balance Added to Bill:</span>
+                      <span className="font-mono text-amber-300 font-black">${balanceDue.toFixed(2)}</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })()}
 
           {/* Payment Method Selector */}
           <div className="p-3 bg-purple-50/60 border border-purple-200/70 rounded-2xl flex items-center justify-between gap-3">
@@ -1926,11 +2256,25 @@ const PharmacyManager = () => {
             <button
               type="submit"
               disabled={submitting}
-              className="px-5 py-2 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-xl text-xs shadow-md transition cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
+              className="px-5 py-2.5 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-xl text-xs shadow-md transition cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
             >
               <Receipt className="w-3.5 h-3.5" />
               <span>
-                {submitting ? 'Processing...' : `Confirm Payment ($${dispenseItems.filter(it => it.purchased).reduce((acc, it) => acc + (parseFloat(it.total_price) || 0), 0).toFixed(2)}) & Dispense`}
+                {submitting ? 'Processing...' : (() => {
+                  const subtotal = dispenseItems.filter(it => it.purchased).reduce((acc, it) => acc + (parseFloat(it.total_price) || 0), 0);
+                  const discountVal = Math.max(0, parseFloat(dispenseDiscount) || 0);
+                  const netPayable = Math.max(0, subtotal - discountVal);
+                  const paidVal = dispensePaidAmount === '' ? netPayable : Math.max(0, parseFloat(dispensePaidAmount) || 0);
+                  const effectivePaid = Math.min(netPayable, paidVal);
+                  const balanceDue = Math.max(0, netPayable - effectivePaid);
+
+                  if (balanceDue > 0 && effectivePaid > 0) {
+                    return `Confirm Partial Payment ($${effectivePaid.toFixed(2)}) & Dispense`;
+                  } else if (effectivePaid === 0 && netPayable > 0) {
+                    return `Dispense & Bill Later ($${netPayable.toFixed(2)})`;
+                  }
+                  return `Confirm Payment ($${netPayable.toFixed(2)}) & Dispense`;
+                })()}
               </span>
             </button>
           </div>
@@ -2032,6 +2376,139 @@ const PharmacyManager = () => {
             >
               <Printer className="w-3.5 h-3.5" />
               <span>Print Prescription</span>
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* ========================================================================= */}
+      {/* MODAL 5: RECORD-ONLY PRESCRIPTION SLIP (Medicines only, NO price shown)   */}
+      {/* ========================================================================= */}
+      <Modal
+        isOpen={isRecordOnlySlipOpen}
+        onClose={() => setIsRecordOnlySlipOpen(false)}
+        icon={ClipboardList}
+        title="Patient Prescription — Record Only"
+        subtitle="Saved to patient record. Patient purchases medicines externally."
+        maxWidth="max-w-2xl"
+      >
+        <div className="space-y-4 text-xs p-3">
+
+          {/* Clinic Header */}
+          <div className="text-center pb-3 border-b-2 border-purple-600 space-y-1">
+            <h2 className="text-lg font-black text-slate-900 tracking-tight uppercase">SNAB DENTAL &amp; DERMATOLOGIC CLINIC</h2>
+            <p className="text-[10px] text-amber-600 font-bold uppercase">Specialized Dental Care • Oral Surgery • Dermatologic Care</p>
+            <p className="text-[10px] text-slate-500 font-mono">Mogadishu Main Road, KM4, Somalia • Tel: +252 61 5000000</p>
+          </div>
+
+          {/* Prescription Details */}
+          <div className="p-3.5 bg-slate-50 rounded-2xl space-y-1.5 font-mono text-[11px] border border-slate-200">
+            <div className="flex justify-between">
+              <span>Rx Number: <strong className="text-purple-900">{recordOnlyPrescription?.prescription_number}</strong></span>
+              <span>Date: <strong>{new Date(recordOnlyPrescription?.createdAt).toLocaleDateString()}</strong></span>
+            </div>
+            <div className="flex justify-between">
+              <span>Patient: <strong className="text-slate-900">{recordOnlyPrescription?.patient_id?.name}</strong></span>
+              <span>Patient No: <strong>{recordOnlyPrescription?.patient_id?.patient_number}</strong></span>
+            </div>
+            <div className="flex justify-between">
+              <span>Phone: <strong>{recordOnlyPrescription?.patient_id?.telephone || '—'}</strong></span>
+              <span>Doctor: <strong>Dr. {recordOnlyPrescription?.doctor_id?.full_name}</strong></span>
+            </div>
+          </div>
+
+          {/* Medicines List — NO prices, NO amounts */}
+          <div className="space-y-2 pt-2">
+            <span className="font-serif italic font-black text-3xl text-purple-900 block">℞</span>
+            <div className="space-y-3 pl-2">
+              {recordOnlyPrescription?.items?.map((it, idx) => (
+                <div key={idx} className="pb-3 border-b border-slate-100 space-y-1">
+                  {/* Medicine name + dosage — NO price */}
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className="font-black text-slate-900 text-xs">
+                        {idx + 1}. {it.medicine_name}
+                      </span>
+                      <span className="font-mono text-purple-800 font-bold text-xs">— {it.dosage}</span>
+                      {it.is_injection && (
+                        <span className="text-[9px] bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded font-bold">[Injection]</span>
+                      )}
+                      {it.prn && (
+                        <span className="text-[9px] bg-purple-100 text-purple-800 px-1.5 py-0.5 rounded font-bold">[PRN]</span>
+                      )}
+                    </div>
+                    <span className="font-mono font-bold text-slate-700 shrink-0 text-xs">Qty: {it.quantity}</span>
+                  </div>
+
+                  {/* Sig line */}
+                  <p className="text-[11px] text-slate-700">
+                    <strong>Sig:</strong> {it.frequency} for {it.duration}
+                    {it.food_relation && <> • <strong>Timing:</strong> {it.food_relation}</>}
+                    {it.route && <> • <strong>Route:</strong> {it.route}</>}
+                  </p>
+
+                  {/* Patient instructions */}
+                  {it.instructions && (
+                    <p className="text-[10px] text-slate-500 italic">
+                      Instructions: {it.instructions}
+                    </p>
+                  )}
+
+                  {/* PRN reason */}
+                  {it.prn && it.prn_reason && (
+                    <p className="text-[10px] text-purple-700 font-medium">
+                      PRN Indication: {it.prn_reason}
+                    </p>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Doctor notes */}
+          {recordOnlyPrescription?.notes && (
+            <p className="text-[11px] text-slate-700 bg-purple-50 p-3 rounded-2xl border border-purple-200">
+              <strong>Clinical Directions:</strong> {recordOnlyPrescription.notes}
+            </p>
+          )}
+
+          {/* Notice banner — patient external purchase */}
+          <div className="p-3 bg-amber-50 border border-amber-200 rounded-2xl flex items-start gap-2">
+            <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+            <div>
+              <p className="font-bold text-amber-900 text-xs">Prescription for External Purchase</p>
+              <p className="text-[10px] text-amber-700 mt-0.5">
+                This prescription is saved to the patient's record. The patient will purchase the medicines externally. No billing has been generated.
+              </p>
+            </div>
+          </div>
+
+          {/* Doctor signature */}
+          <div className="flex justify-between items-center pt-4 border-t border-slate-200 text-[10px] text-slate-400">
+            <div>
+              <p>Issued by SNAB Pharmacy System • Patient Record Copy</p>
+            </div>
+            <div className="text-right">
+              <div className="w-36 border-b border-slate-400 mb-1"></div>
+              <p className="font-bold text-slate-600">Dr. {recordOnlyPrescription?.doctor_id?.full_name}</p>
+              <p>Attending Doctor Signature</p>
+            </div>
+          </div>
+
+          {/* Actions */}
+          <div className="flex justify-end gap-2 pt-3 border-t border-slate-100">
+            <button
+              onClick={() => setIsRecordOnlySlipOpen(false)}
+              className="px-4 py-2 bg-slate-100 rounded-xl font-bold text-xs cursor-pointer hover:bg-slate-200"
+            >
+              Close
+            </button>
+            <button
+              onClick={() => window.print()}
+              className="px-5 py-2 bg-purple-600 text-white rounded-xl font-bold text-xs shadow flex items-center gap-1.5 cursor-pointer hover:bg-purple-700"
+            >
+              <Printer className="w-3.5 h-3.5" />
+              <span>Print Prescription Slip</span>
             </button>
           </div>
         </div>

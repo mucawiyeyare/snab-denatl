@@ -97,6 +97,10 @@ export const createInventoryApi = (data) => api.post('/inventory', data);
 export const updateInventoryApi = (id, data) => api.put(`/inventory/${id}`, data);
 export const recordItemUsageApi = (id, data) => api.post(`/inventory/${id}/usage`, data);
 export const deleteInventoryApi = (id) => api.delete(`/inventory/${id}`);
+export const getInventoryCategoriesApi = () => api.get('/inventory/categories');
+export const createInventoryCategoryApi = (data) => api.post('/inventory/categories', data);
+export const updateInventoryCategoryApi = (id, data) => api.put(`/inventory/categories/${id}`, data);
+export const deleteInventoryCategoryApi = (id) => api.delete(`/inventory/categories/${id}`);
 
 // Pharmacy Medicines & Prescriptions
 export const getMedicinesApi = (params) => api.get('/medicines', { params });

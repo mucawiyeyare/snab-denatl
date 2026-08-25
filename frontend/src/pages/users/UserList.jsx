@@ -232,10 +232,10 @@ const UserList = () => {
         ) : filtered.length === 0 ? (
           <div className="text-center py-16 text-slate-400 text-xs">No users found.</div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs text-left">
+          <div className="dental-table-container">
+            <table className="dental-table">
               <thead>
-                <tr className="bg-slate-50/80 border-b border-slate-100 text-slate-500 font-bold uppercase tracking-wider">
+                <tr>
                   <th className="py-3.5 px-6">User Account</th>
                   <th className="py-3.5 px-4">Full Name & Email</th>
                   <th className="py-3.5 px-4">Access Role</th>
@@ -244,7 +244,7 @@ const UserList = () => {
                   <th className="py-3.5 px-6 text-right">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100 font-medium">
+              <tbody>
                 {filtered.map(u => {
                   const isCurrent = currentUser?._id && u._id === currentUser._id;
                   return (

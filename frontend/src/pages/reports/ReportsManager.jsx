@@ -404,9 +404,9 @@ const ReportsManager = () => {
                   </div>
                 </div>
 
-                <div className="overflow-x-auto rounded-2xl border border-slate-200">
-                  <table className="w-full text-xs text-left">
-                    <thead className="bg-slate-50 text-slate-500 font-bold uppercase text-[10px] tracking-wider border-b border-slate-200">
+                <div className="dental-table-container">
+                  <table className="dental-table">
+                    <thead>
                       <tr>
                         <th className="py-3 px-4">Month</th>
                         <th className="py-3 px-4 text-right">Collected Revenue ($)</th>
@@ -418,9 +418,9 @@ const ReportsManager = () => {
                         <th className="py-3 px-4 text-center">Patients</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-slate-100">
+                    <tbody>
                       {monthlyList.map((m, idx) => (
-                        <tr key={idx} className="hover:bg-slate-50/80 transition font-mono">
+                        <tr key={idx} className="font-mono">
                           <td className="py-3 px-4 font-sans font-bold text-slate-900">{m.month}</td>
                           <td className="py-3 px-4 text-right font-bold text-emerald-700">${safeNum(m.collected_revenue)}</td>
                           <td className="py-3 px-4 text-right font-bold text-rose-600">${safeNum(m.total_expenses)}</td>
@@ -434,13 +434,13 @@ const ReportsManager = () => {
                         </tr>
                       ))}
                     </tbody>
-                    <tfoot className="bg-slate-900 text-white font-mono font-bold text-xs border-t-2 border-slate-900">
+                    <tfoot>
                       <tr>
                         <td className="py-3.5 px-4 font-sans uppercase">Total Annual ({selectedYear})</td>
-                        <td className="py-3.5 px-4 text-right text-emerald-400">${safeNum(summary.collected_revenue)}</td>
-                        <td className="py-3.5 px-4 text-right text-rose-400">${safeNum(summary.total_expenses)}</td>
-                        <td className="py-3.5 px-4 text-right text-blue-300 text-sm font-black">${safeNum(summary.net_income)}</td>
-                        <td className="py-3.5 px-4 text-right text-amber-300">${safeNum(summary.outstanding_revenue)}</td>
+                        <td className="py-3.5 px-4 text-right text-emerald-600">${safeNum(summary.collected_revenue)}</td>
+                        <td className="py-3.5 px-4 text-right text-rose-600">${safeNum(summary.total_expenses)}</td>
+                        <td className="py-3.5 px-4 text-right text-blue-700 text-sm font-black">${safeNum(summary.net_income)}</td>
+                        <td className="py-3.5 px-4 text-right text-amber-600">${safeNum(summary.outstanding_revenue)}</td>
                         <td className="py-3.5 px-4 text-right">${safeNum(summary.total_discounts)}</td>
                         <td className="py-3.5 px-4 text-center">{summary.total_invoices || 0}</td>
                         <td className="py-3.5 px-4 text-center">{summary.total_patients || 0}</td>

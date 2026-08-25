@@ -14,7 +14,7 @@ import { logAudit } from '../middleware/audit.js';
 
 export const getVisits = async (req, res, next) => {
   try {
-    const { status, doctor_id, patient_id, today, search } = req.query;
+    const { status, doctor_id, patient_id, today, search, exclude_completed } = req.query;
     let filter = {};
 
     // Strict Doctor Scoping: Doctors ONLY see their assigned visits
@@ -26,6 +26,11 @@ export const getVisits = async (req, res, next) => {
 
     if (patient_id) filter.patient_id = patient_id;
     if (status) filter.status = status;
+
+    // exclude_completed: show only in-progress visits (for prescription patient selector)
+    if (exclude_completed === 'true' && !status) {
+      filter.status = { $nin: ['Completed', 'Cancelled', 'Paid'] };
+    }
 
     if (today === 'true') {
       const startOfDay = new Date();

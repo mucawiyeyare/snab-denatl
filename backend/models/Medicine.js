@@ -24,6 +24,7 @@ const medicineSchema = new mongoose.Schema({
       'Anti-inflammatory (NSAID)',
       'Mouthwash & Antiseptic',
       'Anesthetics',
+      'Injections & Cartridges',
       'Dermatologic & Topicals',
       'Vitamins & Supplements',
       'Other'

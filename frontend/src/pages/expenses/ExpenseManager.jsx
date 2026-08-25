@@ -419,9 +419,9 @@ const ExpenseManager = () => {
         ) : (
           <>
             {/* Desktop Table View */}
-            <div className="hidden lg:block overflow-x-auto rounded-2xl border border-slate-200">
-              <table className="w-full text-xs text-left">
-                <thead className="bg-slate-50 text-slate-500 font-bold uppercase text-[10px] tracking-wider border-b border-slate-200">
+            <div className="hidden lg:block dental-table-container">
+              <table className="dental-table">
+                <thead>
                   <tr>
                     <th className="py-3 px-4">Code</th>
                     <th className="py-3 px-4">Date</th>
@@ -434,7 +434,7 @@ const ExpenseManager = () => {
                     {isAdmin && <th className="py-3 px-4 text-right">Actions</th>}
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100">
+                <tbody>
                   {filteredExpenses.map((exp) => (
                     <tr key={exp._id} className="hover:bg-slate-50/80 transition">
                       <td className="py-3 px-4 font-mono font-bold text-slate-500">{exp.expense_code}</td>

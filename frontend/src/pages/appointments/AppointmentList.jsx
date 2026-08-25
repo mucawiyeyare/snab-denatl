@@ -290,10 +290,10 @@ const AppointmentList = () => {
                 <p className="text-xs text-slate-400">Book a new appointment to get started.</p>
               </div>
             ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-xs text-left">
+              <div className="dental-table-container">
+                <table className="dental-table">
                   <thead>
-                    <tr className="bg-slate-50/80 border-b border-slate-100 text-slate-500 font-bold uppercase tracking-wider">
+                    <tr>
                       <th className="py-3.5 px-5">Date</th>
                       <th className="py-3.5 px-4">Time</th>
                       <th className="py-3.5 px-4">Patient</th>
@@ -303,7 +303,7 @@ const AppointmentList = () => {
                       <th className="py-3.5 px-5 text-right">Actions</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-100 font-medium">
+                  <tbody>
                     {filteredApt.map(apt => (
                       <tr key={apt._id} className="hover:bg-slate-50/80 transition">
                         <td className="py-3.5 px-5 text-slate-900 font-bold">
@@ -433,10 +433,10 @@ const AppointmentList = () => {
                 </p>
               </div>
             ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-xs text-left">
+              <div className="dental-table-container">
+                <table className="dental-table">
                   <thead>
-                    <tr className="bg-slate-50/80 border-b border-slate-100 text-slate-500 font-bold uppercase tracking-wider">
+                    <tr>
                       <th className="py-3.5 px-5">Due Date</th>
                       <th className="py-3.5 px-4">Patient</th>
                       <th className="py-3.5 px-4">Telephone</th>
@@ -446,7 +446,7 @@ const AppointmentList = () => {
                       <th className="py-3.5 px-5 text-right">Actions</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-100 font-medium">
+                  <tbody>
                     {filteredFu.map(f => (
                       <tr key={f._id} className="hover:bg-slate-50/80 transition">
                         <td className="py-3.5 px-5 font-bold text-slate-900 font-mono">

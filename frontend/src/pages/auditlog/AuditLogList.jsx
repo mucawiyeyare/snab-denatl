@@ -57,10 +57,10 @@ const AuditLogList = () => {
         ) : filtered.length === 0 ? (
           <div className="text-center py-16 text-slate-400 text-xs">No audit logs found.</div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs text-left">
+          <div className="dental-table-container">
+            <table className="dental-table">
               <thead>
-                <tr className="bg-slate-50/80 border-b border-slate-100 text-slate-500 font-bold uppercase tracking-wider">
+                <tr>
                   <th className="py-3.5 px-6">Timestamp</th>
                   <th className="py-3.5 px-4">User</th>
                   <th className="py-3.5 px-4">Role</th>
@@ -69,7 +69,7 @@ const AuditLogList = () => {
                   <th className="py-3.5 px-6">Event Details</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100 font-medium">
+              <tbody>
                 {filtered.map(l => (
                   <tr key={l._id} className="hover:bg-slate-50/80 transition">
                     <td className="py-3.5 px-6 text-slate-400 font-mono text-[11px]">

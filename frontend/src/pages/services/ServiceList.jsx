@@ -163,10 +163,10 @@ const ServiceList = () => {
             No dental procedures found.
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs text-left">
+          <div className="dental-table-container">
+            <table className="dental-table">
               <thead>
-                <tr className="bg-slate-50/80 border-b border-slate-100 text-slate-500 font-bold uppercase tracking-wider">
+                <tr>
                   <th className="py-3.5 px-6">Code</th>
                   <th className="py-3.5 px-4">Procedure Name</th>
                   <th className="py-3.5 px-4">Category</th>
@@ -174,7 +174,7 @@ const ServiceList = () => {
                   {isAdmin && <th className="py-3.5 px-6 text-right">Action</th>}
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100 font-medium">
+              <tbody>
                 {services.map(s => (
                   <tr key={s._id} className="hover:bg-slate-50/80 transition">
                     <td className="py-4 px-6 font-mono font-bold text-blue-600">

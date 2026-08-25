@@ -484,10 +484,10 @@ const LabManager = () => {
               </p>
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-xs text-left">
+            <div className="dental-table-container">
+              <table className="dental-table">
                 <thead>
-                  <tr className="bg-slate-50/80 border-b border-slate-100 text-slate-500 font-bold uppercase tracking-wider">
+                  <tr>
                     <th className="py-3.5 px-5">Session #</th>
                     <th className="py-3.5 px-4">Patient Name & ID</th>
                     <th className="py-3.5 px-4">Requested Test(s)</th>
@@ -498,7 +498,7 @@ const LabManager = () => {
                     <th className="py-3.5 px-5 text-right">Cashier Action</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100 font-medium">
+                <tbody>
                   {filteredPending.map((req) => {
                     const testCount = (req.tests && req.tests.length > 0) ? req.tests.length : 1;
                     return (
@@ -586,10 +586,10 @@ const LabManager = () => {
               No completed laboratory records match your search.
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-xs text-left">
+            <div className="dental-table-container">
+              <table className="dental-table">
                 <thead>
-                  <tr className="bg-slate-50/80 border-b border-slate-100 text-slate-500 font-bold uppercase tracking-wider">
+                  <tr>
                     <th className="py-3.5 px-5">Session #</th>
                     <th className="py-3.5 px-4">Patient</th>
                     <th className="py-3.5 px-4">Laboratory Tests & Outcomes</th>
@@ -600,7 +600,7 @@ const LabManager = () => {
                     <th className="py-3.5 px-5 text-right">Status</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100 font-medium">
+                <tbody>
                   {filteredCompleted.map((r) => {
                     const totalCost = Number(r.total_cost || r.cost || r.price || 0);
 
@@ -692,21 +692,20 @@ const LabManager = () => {
             )}
           </div>
 
-          <div className="bg-white rounded-2xl border border-slate-100 shadow-xs overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full text-xs text-left">
-                <thead>
-                  <tr className="bg-slate-50 border-b border-slate-100 text-slate-500 font-bold uppercase tracking-wider">
-                    <th className="py-3 px-5">Code</th>
-                    <th className="py-3 px-4">Test / Disease Name</th>
-                    <th className="py-3 px-4">Category</th>
-                    <th className="py-3 px-4">Sample Type</th>
-                    <th className="py-3 px-4">Reference Range</th>
-                    <th className="py-3 px-4 text-center">Status</th>
-                    {isAdmin && <th className="py-3 px-5 text-right">Actions</th>}
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 font-medium">
+          <div className="dental-table-container">
+            <table className="dental-table">
+              <thead>
+                <tr>
+                  <th className="py-3 px-5">Code</th>
+                  <th className="py-3 px-4">Test / Disease Name</th>
+                  <th className="py-3 px-4">Category</th>
+                  <th className="py-3 px-4">Sample Type</th>
+                  <th className="py-3 px-4">Reference Range</th>
+                  <th className="py-3 px-4 text-center">Status</th>
+                  {isAdmin && <th className="py-3 px-5 text-right">Actions</th>}
+                </tr>
+              </thead>
+              <tbody>
                   {tests.map((t) => (
                     <tr key={t._id} className="hover:bg-slate-50/80 transition">
                       <td className="py-3.5 px-5 font-mono font-bold text-purple-700">{t.test_code}</td>
@@ -772,7 +771,6 @@ const LabManager = () => {
                 </tbody>
               </table>
             </div>
-          </div>
         </div>
       )}
 

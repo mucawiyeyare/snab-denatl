@@ -226,9 +226,9 @@ const PaymentList = () => {
         ) : (
           <>
             {/* Desktop Table View */}
-            <div className="hidden lg:block overflow-x-auto rounded-2xl border border-slate-100">
-              <table className="w-full text-xs text-left">
-                <thead className="bg-slate-50/70 text-slate-400 font-black uppercase text-[10px] tracking-wider border-b border-slate-100">
+            <div className="hidden lg:block dental-table-container">
+              <table className="dental-table">
+                <thead>
                   <tr>
                     <th className="py-3 px-4">RECEIPT #</th>
                     <th className="py-3 px-4">DATE & TIME</th>
@@ -241,7 +241,7 @@ const PaymentList = () => {
                     <th className="py-3 px-4 text-right">RECEIPT</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100">
+                <tbody>
                   {filtered.map((p) => (
                     <tr key={p._id} className="hover:bg-slate-50/80 transition group">
                       <td className="py-3.5 px-4 font-mono font-bold text-blue-600 hover:underline cursor-pointer" onClick={() => handleOpenReceipt(p)}>

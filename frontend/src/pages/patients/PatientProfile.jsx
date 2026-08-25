@@ -523,10 +523,10 @@ const PatientProfile = () => {
               {treatments.length === 0 ? (
                 <p className="text-xs text-slate-400 py-4">No treatments recorded yet.</p>
               ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-xs text-left">
+                <div className="dental-table-container">
+                  <table className="dental-table">
                     <thead>
-                      <tr className="bg-slate-50 border-b border-slate-100 text-slate-500 font-bold uppercase">
+                      <tr>
                         <th className="py-2.5 px-3">Date</th>
                         <th className="py-2.5 px-3">Service / Procedure</th>
                         <th className="py-2.5 px-3">Tooth #</th>
@@ -535,7 +535,7 @@ const PatientProfile = () => {
                         <th className="py-2.5 px-3 text-right">Payment</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-slate-100">
+                    <tbody>
                       {treatments.map(t => (
                         <tr key={t._id}>
                           <td className="py-3 px-3 text-slate-500">{new Date(t.treatment_date).toLocaleDateString()}</td>
@@ -642,23 +642,37 @@ const PatientProfile = () => {
                             </p>
                           </div>
                         </div>
-                        <StatusBadge status={rx.payment_status === 'Paid' ? 'Paid' : (rx.status === 'Dispensed' ? 'Dispensed' : 'Unpaid')} />
+                        <div className="flex items-center gap-2">
+                          {rx.status === 'Record_Only' ? (
+                            <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-slate-100 text-slate-700 border border-slate-200 flex items-center gap-1">
+                              <span>🏷️ Purchased Externally (Not Billed)</span>
+                            </span>
+                          ) : rx.payment_status === 'Paid' || rx.status === 'Dispensed' ? (
+                            <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200 flex items-center gap-1">
+                              <span>✅ Paid &amp; Dispensed</span>
+                            </span>
+                          ) : (
+                            <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-200 flex items-center gap-1">
+                              <span>💳 Billed to Cashier (Unpaid)</span>
+                            </span>
+                          )}
+                        </div>
                       </div>
 
-                      <div className="overflow-x-auto">
-                        <table className="w-full text-xs text-left">
+                      <div className="dental-table-container">
+                        <table className="dental-table">
                           <thead>
-                            <tr className="text-[10px] font-bold text-slate-400 uppercase tracking-wider border-b border-slate-100">
-                              <th className="pb-1.5">Medicine</th>
-                              <th className="pb-1.5">Dose</th>
-                              <th className="pb-1.5">Frequency</th>
-                              <th className="pb-1.5">Duration</th>
-                              <th className="pb-1.5 text-center">Qty</th>
-                              <th className="pb-1.5 text-right">Price</th>
-                              <th className="pb-1.5 text-right">Purchase Status</th>
+                            <tr>
+                              <th className="py-2.5 px-3">Medicine</th>
+                              <th className="py-2.5 px-3">Dose</th>
+                              <th className="py-2.5 px-3">Frequency</th>
+                              <th className="py-2.5 px-3">Duration</th>
+                              <th className="py-2.5 px-3 text-center">Qty</th>
+                              <th className="py-2.5 px-3 text-right">Price</th>
+                              <th className="py-2.5 px-3 text-right">Billing &amp; Purchase Status</th>
                             </tr>
                           </thead>
-                          <tbody className="divide-y divide-slate-100">
+                          <tbody>
                             {rx.items?.map((item, idx) => (
                               <tr key={idx} className="hover:bg-slate-50/50">
                                 <td className="py-2 font-bold text-slate-900">
@@ -673,21 +687,37 @@ const PatientProfile = () => {
                                 <td className="py-2 text-center font-mono font-bold text-purple-700">{item.quantity}</td>
                                 <td className="py-2 text-right font-mono font-bold text-slate-900">${Number(item.total_price || 0).toFixed(2)}</td>
                                 <td className="py-2 text-right">
-                                  <span className={`px-2 py-0.5 rounded-md text-[9px] font-bold ${
-                                    item.status === 'Dispensed' || item.is_purchased
-                                      ? 'bg-emerald-100 text-emerald-800'
-                                      : item.status === 'Declined / External'
-                                      ? 'bg-slate-100 text-slate-500'
-                                      : 'bg-amber-100 text-amber-800'
-                                  }`}>
-                                    {item.status || 'Pending'}
-                                  </span>
+                                  {rx.status === 'Record_Only' ? (
+                                    <span className="px-2 py-0.5 rounded-md text-[9px] font-bold bg-slate-100 text-slate-600">
+                                      External Purchase ($0.00 bill)
+                                    </span>
+                                  ) : (
+                                    <span className={`px-2 py-0.5 rounded-md text-[9px] font-bold ${
+                                      item.status === 'Dispensed' || item.is_purchased || rx.payment_status === 'Paid'
+                                        ? 'bg-emerald-100 text-emerald-800'
+                                        : item.status === 'Declined / External'
+                                        ? 'bg-slate-100 text-slate-500'
+                                        : 'bg-amber-100 text-amber-800'
+                                    }`}>
+                                      {item.status === 'Dispensed' || item.is_purchased || rx.payment_status === 'Paid'
+                                        ? 'Paid & Dispensed'
+                                        : item.status === 'Declined / External'
+                                        ? 'Declined / External'
+                                        : 'Billed (Pending Payment)'}
+                                    </span>
+                                  )}
                                 </td>
                               </tr>
                             ))}
                           </tbody>
                         </table>
                       </div>
+
+                      {rx.status === 'Record_Only' && (
+                        <p className="text-[10px] text-slate-500 italic bg-slate-50 p-2 rounded-xl border border-slate-100">
+                          ℹ️ Prescribed for external patient purchase • No facility charge added to billing invoice.
+                        </p>
+                      )}
 
                       {rx.notes && (
                         <p className="text-[11px] text-slate-500 bg-slate-50 p-2 rounded-xl">
@@ -883,10 +913,10 @@ const PatientProfile = () => {
                       No financial transactions match the selected filter.
                     </div>
                   ) : (
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-xs text-left">
+                    <div className="dental-table-container">
+                      <table className="dental-table">
                         <thead>
-                          <tr className="bg-slate-50/90 border-b border-slate-100 text-slate-500 font-bold uppercase tracking-wider">
+                          <tr>
                             <th className="py-3 px-4">Trans / Inv #</th>
                             <th className="py-3 px-3">Date</th>
                             <th className="py-3 px-3">Description / Services</th>
@@ -900,7 +930,7 @@ const PatientProfile = () => {
                             <th className="py-3 px-4 text-right no-print">Actions</th>
                           </tr>
                         </thead>
-                        <tbody className="divide-y divide-slate-100 bg-white font-medium">
+                        <tbody>
                           {filteredTransactions.map((tx) => (
                             <tr key={tx._id} className="hover:bg-slate-50/80 transition">
                               <td className="py-3 px-4 font-mono font-bold text-blue-600">
@@ -1107,25 +1137,47 @@ const PatientProfile = () => {
             </div>
 
             {/* Line Items */}
-            <div className="border rounded-xl overflow-hidden">
-              <table className="w-full text-xs">
+            <div className="dental-table-container">
+              <table className="dental-table">
                 <thead>
-                  <tr className="bg-slate-100/70 border-b text-slate-600 font-bold uppercase text-[10px]">
-                    <th className="p-2 text-left">Item / Description</th>
-                    <th className="p-2 text-center">Type</th>
-                    <th className="p-2 text-center">Qty</th>
-                    <th className="p-2 text-right">Price</th>
-                    <th className="p-2 text-right">Total</th>
+                  <tr>
+                    <th className="p-2.5 text-left">Item / Description</th>
+                    <th className="p-2.5 text-center">Category</th>
+                    <th className="p-2.5 text-center">Qty</th>
+                    <th className="p-2.5 text-right">Unit Price</th>
+                    <th className="p-2.5 text-right">Total ($)</th>
+                    <th className="p-2.5 text-center">Status</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100">
+                <tbody>
                   {selectedInvoice.items?.map((item, idx) => (
-                    <tr key={idx}>
-                      <td className="p-2 font-semibold text-slate-800">{item.description || item.item_name}</td>
-                      <td className="p-2 text-center text-slate-500">{item.item_type}</td>
-                      <td className="p-2 text-center">{item.quantity || 1}</td>
-                      <td className="p-2 text-right font-mono">${(item.unit_price || item.total_price || 0).toFixed(2)}</td>
-                      <td className="p-2 text-right font-mono font-bold">${(item.total_price || 0).toFixed(2)}</td>
+                    <tr key={idx} className="hover:bg-slate-50/50">
+                      <td className="p-2.5 font-semibold text-slate-800">{item.description || item.item_name}</td>
+                      <td className="p-2.5 text-center">
+                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                          item.item_type === 'Pharmacy'
+                            ? 'bg-purple-100 text-purple-800'
+                            : item.item_type === 'Treatment'
+                            ? 'bg-blue-100 text-blue-800'
+                            : item.item_type === 'LabTest'
+                            ? 'bg-amber-100 text-amber-800'
+                            : 'bg-slate-100 text-slate-700'
+                        }`}>
+                          {item.item_type}
+                        </span>
+                      </td>
+                      <td className="p-2.5 text-center font-mono">{item.quantity || 1}</td>
+                      <td className="p-2.5 text-right font-mono">${Number(item.unit_price || item.total_price || 0).toFixed(2)}</td>
+                      <td className="p-2.5 text-right font-mono font-bold text-slate-900">${Number(item.total_price || 0).toFixed(2)}</td>
+                      <td className="p-2.5 text-center">
+                        <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold ${
+                          item.paid_status === 'Paid'
+                            ? 'bg-emerald-100 text-emerald-800'
+                            : 'bg-amber-100 text-amber-800'
+                        }`}>
+                          {item.paid_status === 'Paid' ? 'Paid' : 'Billed'}
+                        </span>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -1133,28 +1185,28 @@ const PatientProfile = () => {
             </div>
 
             {/* Totals Breakdown */}
-            <div className="bg-slate-900 text-white p-3.5 rounded-2xl space-y-1.5 font-medium">
+            <div className="bg-slate-900 text-white p-3.5 rounded-2xl space-y-1.5 font-medium text-xs font-mono">
               <div className="flex justify-between text-slate-300">
-                <span>Subtotal:</span>
-                <span className="font-mono font-bold text-white">${(Number(selectedInvoice.subtotal) || Number(selectedInvoice.total_amount) || 0).toFixed(2)}</span>
+                <span className="font-sans">Subtotal:</span>
+                <span className="font-bold text-white">${(Number(selectedInvoice.subtotal) || Number(selectedInvoice.total_amount) || 0).toFixed(2)}</span>
               </div>
               {selectedInvoice.discount > 0 && (
                 <div className="flex justify-between text-emerald-400">
-                  <span>Approved Discount:</span>
-                  <span className="font-mono font-bold">-${Number(selectedInvoice.discount).toFixed(2)}</span>
+                  <span className="font-sans">Approved Discount:</span>
+                  <span className="font-bold">-${Number(selectedInvoice.discount).toFixed(2)}</span>
                 </div>
               )}
               <div className="flex justify-between text-slate-100 font-bold pt-1 border-t border-slate-800">
-                <span>Total Amount:</span>
-                <span className="font-mono text-white font-black">${(Number(selectedInvoice.total_amount) || 0).toFixed(2)}</span>
+                <span className="font-sans">Total Amount Due:</span>
+                <span className="text-emerald-400 font-black">${(Number(selectedInvoice.total_amount) || 0).toFixed(2)}</span>
               </div>
-              <div className="flex justify-between text-emerald-400 font-bold">
-                <span>Previously Paid:</span>
-                <span className="font-mono">${(Number(selectedInvoice.paid_amount) || 0).toFixed(2)}</span>
+              <div className="flex justify-between text-slate-400 font-bold">
+                <span className="font-sans">Previously Paid:</span>
+                <span>${(Number(selectedInvoice.paid_amount) || 0).toFixed(2)}</span>
               </div>
               <div className="flex justify-between font-black text-sm pt-1 border-t border-slate-800">
-                <span>Balance Due:</span>
-                <span className={`font-mono ${(Number(selectedInvoice.balance) || 0) > 0 ? 'text-rose-400' : 'text-emerald-400'}`}>
+                <span className="font-sans">Remaining Balance:</span>
+                <span className={`${(Number(selectedInvoice.balance) || 0) > 0 ? 'text-rose-400' : 'text-emerald-400'}`}>
                   ${(Number(selectedInvoice.balance) || 0).toFixed(2)}
                 </span>
               </div>

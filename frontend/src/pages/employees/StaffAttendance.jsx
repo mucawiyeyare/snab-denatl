@@ -93,10 +93,10 @@ const StaffAttendance = () => {
             <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs text-left">
+          <div className="dental-table-container">
+            <table className="dental-table">
               <thead>
-                <tr className="bg-slate-50/80 border-b border-slate-100 text-slate-500 font-bold uppercase tracking-wider">
+                <tr>
                   <th className="py-3.5 px-6">Staff ID</th>
                   <th className="py-3.5 px-4">Employee Name</th>
                   <th className="py-3.5 px-4">Position / Dept</th>
@@ -105,7 +105,7 @@ const StaffAttendance = () => {
                   <th className="py-3.5 px-6 text-right">Log Attendance</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100 font-medium">
+              <tbody>
                 {employees.map(emp => {
                   const todayLog = emp.attendance?.find(a => 
                     new Date(a.date).toISOString().split('T')[0] === selectedDate

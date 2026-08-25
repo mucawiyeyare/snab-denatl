@@ -294,9 +294,9 @@ const DailyIncome = () => {
         ) : (
           <>
             {/* Desktop Table View */}
-            <div className="hidden lg:block overflow-x-auto rounded-2xl border border-slate-200">
-              <table className="w-full text-xs text-left">
-                <thead className="bg-slate-50 text-slate-500 font-bold uppercase text-[10px] tracking-wider border-b border-slate-200">
+            <div className="hidden lg:block dental-table-container">
+              <table className="dental-table">
+                <thead>
                   <tr>
                     <th className="py-3 px-4">Receipt #</th>
                     <th className="py-3 px-4">Time</th>
@@ -310,7 +310,7 @@ const DailyIncome = () => {
                     <th className="py-3 px-4 text-center">Status</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100">
+                <tbody>
                   {transactions.map((tx) => (
                     <tr key={tx.payment_id} className="hover:bg-slate-50/80 transition">
                       <td className="py-3 px-4 font-mono font-bold text-purple-900">{tx.receipt_number}</td>

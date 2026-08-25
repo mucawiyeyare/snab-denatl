@@ -80,7 +80,7 @@ const prescriptionItemSchema = new mongoose.Schema({
   },
   status: {
     type: String,
-    enum: ['Pending', 'Purchased', 'Dispensed', 'Declined / External'],
+    enum: ['Pending', 'Purchased', 'Dispensed', 'Declined / External', 'Record_Only'],
     default: 'Pending'
   }
 }, { _id: true });
@@ -94,7 +94,7 @@ const prescriptionSchema = new mongoose.Schema({
   visit_id: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Visit',
-    required: true
+    required: false
   },
   patient_id: {
     type: mongoose.Schema.Types.ObjectId,
@@ -114,7 +114,7 @@ const prescriptionSchema = new mongoose.Schema({
   },
   payment_status: {
     type: String,
-    enum: ['Unpaid', 'Partially Paid', 'Paid'],
+    enum: ['Unpaid', 'Partially Paid', 'Paid', 'External'],
     default: 'Unpaid'
   },
   dispensed_by: {
@@ -134,7 +134,7 @@ const prescriptionSchema = new mongoose.Schema({
   },
   status: {
     type: String,
-    enum: ['Pending', 'Completed', 'Dispensed', 'Cancelled'],
+    enum: ['Pending', 'Completed', 'Dispensed', 'Cancelled', 'Record_Only'],
     default: 'Pending'
   }
 }, { timestamps: true });
