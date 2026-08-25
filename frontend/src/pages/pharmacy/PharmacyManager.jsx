@@ -7,6 +7,8 @@ import {
   deleteMedicineApi,
   getPrescriptionsApi,
   createPrescriptionApi,
+  updatePrescriptionApi,
+  deletePrescriptionApi,
   dispensePrescriptionApi,
   getPharmacyReportsApi,
   getVisitsApi,
@@ -48,116 +50,6 @@ import {
   User,
   ClipboardList
 } from 'lucide-react';
-
-const COMMON_PRESETS = [
-  {
-    medicine_name: 'Amoxicillin',
-    dosage: '500 mg',
-    frequency: '3× daily',
-    duration: '5 days',
-    quantity: 15,
-    unit_price: 3.00,
-    instructions: 'Take after meals for 5 continuous days',
-    food_relation: 'After Meals',
-    prn: false,
-    route: 'Oral',
-    is_injection: false
-  },
-  {
-    medicine_name: 'Metronidazole',
-    dosage: '400 mg',
-    frequency: '3× daily',
-    duration: '5 days',
-    quantity: 15,
-    unit_price: 2.50,
-    instructions: 'Take with or after food. Avoid alcohol completely during treatment',
-    food_relation: 'With Meals',
-    prn: false,
-    route: 'Oral',
-    is_injection: false
-  },
-  {
-    medicine_name: 'Paracetamol',
-    dosage: '500 mg',
-    frequency: '3× daily',
-    duration: '3 days',
-    quantity: 9,
-    unit_price: 1.50,
-    instructions: 'Take as needed for pain or fever',
-    food_relation: 'Anytime',
-    prn: true,
-    prn_reason: 'for moderate toothache or fever',
-    route: 'Oral',
-    is_injection: false
-  },
-  {
-    medicine_name: 'Ibuprofen',
-    dosage: '400 mg',
-    frequency: '2× daily',
-    duration: '5 days',
-    quantity: 10,
-    unit_price: 2.00,
-    instructions: 'Take immediately after food for dental swelling and pain',
-    food_relation: 'After Meals',
-    prn: true,
-    prn_reason: 'for severe inflammatory dental pain',
-    route: 'Oral',
-    is_injection: false
-  },
-  {
-    medicine_name: 'Augmentin (Amoxicillin/Clavulanate)',
-    dosage: '625 mg',
-    frequency: '2× daily',
-    duration: '5 days',
-    quantity: 10,
-    unit_price: 6.00,
-    instructions: 'Take 1 tablet every 12 hours with meals',
-    food_relation: 'With Meals',
-    prn: false,
-    route: 'Oral',
-    is_injection: false
-  },
-  {
-    medicine_name: 'Chlorhexidine 0.2% Mouthwash',
-    dosage: '0.2% (300 ml)',
-    frequency: '2× daily',
-    duration: '7 days',
-    quantity: 1,
-    unit_price: 5.00,
-    instructions: 'Rinse with 10ml for 1 minute twice daily after brushing. Do not swallow',
-    food_relation: 'After Meals',
-    prn: false,
-    route: 'Topical / Oral Mucosa',
-    is_injection: false
-  },
-  {
-    medicine_name: 'Lidocaine 2% with Epinephrine (Cartridge)',
-    dosage: '1.8 ml (2%)',
-    frequency: 'Stat / Single Dose',
-    duration: 'Single dose',
-    quantity: 2,
-    unit_price: 4.00,
-    instructions: 'Administered by dental surgeon prior to oral procedure',
-    food_relation: 'Anytime',
-    prn: false,
-    route: 'Dental Infiltration / Nerve Block',
-    is_injection: true
-  },
-  {
-    medicine_name: 'Diclofenac Sodium 75mg/3ml Injection',
-    dosage: '75 mg/3ml',
-    frequency: 'Stat / Once daily',
-    duration: '1 day',
-    quantity: 1,
-    unit_price: 4.50,
-    instructions: 'Deep intramuscular injection for severe acute post-surgical pain',
-    food_relation: 'Anytime',
-    prn: true,
-    prn_reason: 'for acute post-surgical trauma',
-    route: 'Intramuscular (IM)',
-    is_injection: true
-  }
-];
 
 const MEDICINE_CATEGORIES = [
   'Antibiotics',
@@ -259,6 +151,7 @@ const PharmacyManager = () => {
   const [deleteConfirmId, setDeleteConfirmId] = useState(null);
 
   const [isPrescribeModalOpen, setIsPrescribeModalOpen] = useState(false);
+  const [editingPrescription, setEditingPrescription] = useState(null);
   const [isDispenseModalOpen, setIsDispenseModalOpen] = useState(false);
   const [isPrintPrescriptionOpen, setIsPrintPrescriptionOpen] = useState(false);
   const [isReceiptModalOpen, setIsReceiptModalOpen] = useState(false);
@@ -467,6 +360,7 @@ const PharmacyManager = () => {
 
   // --- Doctor Prescribing Actions ---
   const handleOpenPrescribeModal = () => {
+    setEditingPrescription(null);
     setPrescribeVisitId('');
     setSelectedVisitPatient(null);
     setPrescribeItems([
@@ -489,6 +383,66 @@ const PharmacyManager = () => {
     ]);
     setPrescribeNotes('');
     setIsPrescribeModalOpen(true);
+  };
+
+  const handleOpenEditPrescription = (rx) => {
+    setEditingPrescription(rx);
+    const visitVal = rx.visit_id?._id || rx.visit_id || (rx.patient_id?._id || rx.patient_id ? `patient_${rx.patient_id?._id || rx.patient_id}` : '');
+    setPrescribeVisitId(visitVal);
+    setSelectedVisitPatient(rx.patient_id);
+
+    if (rx.items && rx.items.length > 0) {
+      setPrescribeItems(rx.items.map(it => ({
+        medicine_id: it.medicine_id?._id || it.medicine_id || '',
+        medicine_name: it.medicine_name || '',
+        dosage: it.dosage || '500 mg',
+        frequency: it.frequency || '3× daily (TID - every 8h)',
+        duration: it.duration || '5 days',
+        quantity: it.quantity || 1,
+        unit_price: it.unit_price !== undefined ? it.unit_price : 0,
+        instructions: it.instructions || 'Take after meals as directed',
+        food_relation: it.food_relation || 'After Meals',
+        prn: Boolean(it.prn),
+        prn_reason: it.prn_reason || '',
+        route: it.route || 'Oral',
+        is_injection: Boolean(it.is_injection),
+        injection_details: it.injection_details || '',
+        status: it.status || 'Pending'
+      })));
+    } else {
+      setPrescribeItems([
+        {
+          medicine_id: '',
+          medicine_name: '',
+          dosage: '500 mg',
+          frequency: '3× daily (TID - every 8h)',
+          duration: '5 days',
+          quantity: 1,
+          unit_price: 0,
+          instructions: 'Take after meals as directed',
+          food_relation: 'After Meals',
+          prn: false,
+          prn_reason: '',
+          route: 'Oral',
+          is_injection: false,
+          injection_details: ''
+        }
+      ]);
+    }
+    setPrescribeNotes(rx.notes || '');
+    setIsPrescribeModalOpen(true);
+  };
+
+  const handleDeletePrescription = async (id) => {
+    if (!window.confirm('Are you sure you want to delete/cancel this prescription letter?')) return;
+    try {
+      await deletePrescriptionApi(id);
+      showToast('Prescription letter deleted successfully.');
+      fetchPharmacyData();
+    } catch (err) {
+      console.error('Error deleting prescription:', err);
+      alert(err.response?.data?.message || 'Error deleting prescription');
+    }
   };
 
   const handleVisitChange = (vId, option) => {
@@ -551,35 +505,6 @@ const PharmacyManager = () => {
     });
   }, [allPatients, activeVisits]);
 
-  const handleAddPresetItem = (preset) => {
-    const cleanPreset = preset.medicine_name.split('(')[0].toLowerCase().trim();
-    const matchedMed = medicines.find(m => 
-      m.name.toLowerCase() === preset.medicine_name.toLowerCase() ||
-      m.name.toLowerCase().includes(cleanPreset) ||
-      cleanPreset.includes(m.name.toLowerCase()) ||
-      (m.generic_name && m.generic_name.toLowerCase().includes(cleanPreset))
-    );
-    setPrescribeItems([
-      ...prescribeItems,
-      {
-        medicine_id: matchedMed?._id || '',
-        medicine_name: matchedMed?.name || preset.medicine_name,
-        dosage: matchedMed?.strength || preset.dosage,
-        frequency: preset.frequency,
-        duration: preset.duration,
-        quantity: preset.quantity,
-        unit_price: matchedMed?.unit_price !== undefined ? matchedMed.unit_price : preset.unit_price,
-        instructions: matchedMed?.instructions_default || preset.instructions,
-        food_relation: preset.food_relation || 'After Meals',
-        prn: Boolean(preset.prn),
-        prn_reason: preset.prn_reason || '',
-        route: matchedMed?.route_of_administration || preset.route || 'Oral',
-        is_injection: Boolean(preset.is_injection || matchedMed?.is_injection),
-        injection_details: preset.is_injection ? 'Deep IM / Dental infiltration' : ''
-      }
-    ]);
-  };
-
   const handlePrescribeMedicineSelect = (idx, medId) => {
     const med = medicines.find(m => m._id === medId);
     if (!med) return;
@@ -627,31 +552,42 @@ const PharmacyManager = () => {
 
     setSubmitting(true);
     try {
-      const res = await createPrescriptionApi({
-        visit_id: prescribeVisitId && !String(prescribeVisitId).startsWith('patient_') ? prescribeVisitId : undefined,
-        patient_id: selectedVisitPatient?._id || (String(prescribeVisitId).startsWith('patient_') ? String(prescribeVisitId).replace('patient_', '') : undefined),
-        items: validItems,
-        notes: prescribeNotes,
-        destination
-      });
+      let res;
+      if (editingPrescription) {
+        res = await updatePrescriptionApi(editingPrescription._id, {
+          items: validItems,
+          notes: prescribeNotes,
+          destination
+        });
+        showToast(`Prescription letter ${editingPrescription.prescription_number} updated successfully!`);
+      } else {
+        res = await createPrescriptionApi({
+          visit_id: prescribeVisitId && !String(prescribeVisitId).startsWith('patient_') ? prescribeVisitId : undefined,
+          patient_id: selectedVisitPatient?._id || (String(prescribeVisitId).startsWith('patient_') ? String(prescribeVisitId).replace('patient_', '') : undefined),
+          items: validItems,
+          notes: prescribeNotes,
+          destination
+        });
+        if (destination === 'record_only') {
+          // Open the prescription-only slip — shows medicines only, no amount, no cashier
+          setRecordOnlyPrescription(res.data?.data);
+          setIsRecordOnlySlipOpen(true);
+          showToast('Prescription saved to patient record!');
+        } else {
+          showToast('Prescription written and sent to Pharmacy / Cashier Queue!');
+        }
+      }
+
       setIsPrescribeModalOpen(false);
+      setEditingPrescription(null);
       fetchPharmacyData();
 
       if (res.data?.allergy_warnings && res.data.allergy_warnings.length > 0) {
         alert(res.data.allergy_warnings.join('\n'));
       }
-
-      if (destination === 'record_only') {
-        // Open the prescription-only slip — shows medicines only, no amount, no cashier
-        setRecordOnlyPrescription(res.data?.data);
-        setIsRecordOnlySlipOpen(true);
-        showToast('Prescription saved to patient record!');
-      } else {
-        showToast('Prescription written and sent to Pharmacy / Cashier Queue!');
-      }
     } catch (err) {
-      console.error('Error creating prescription:', err);
-      alert(err.response?.data?.message || 'Error creating prescription');
+      console.error('Error saving prescription:', err);
+      alert(err.response?.data?.message || 'Error saving prescription');
     } finally {
       setSubmitting(false);
     }
@@ -933,17 +869,38 @@ const PharmacyManager = () => {
                         </div>
                       </div>
 
-                      <div className="flex items-center gap-2 self-end sm:self-auto">
+                      <div className="flex items-center gap-2 self-end sm:self-auto flex-wrap">
                         <StatusBadge status={rx.payment_status === 'Paid' ? 'Paid' : (rx.status === 'Dispensed' ? 'Dispensed' : 'Unpaid')} />
                         
+                        {(isAdmin || isDoctor || rx.status !== 'Dispensed') && (
+                          <button
+                            onClick={() => handleOpenEditPrescription(rx)}
+                            title="Edit Medicine Letter / Prescription"
+                            className="px-2.5 py-2 bg-purple-50 hover:bg-purple-100 text-purple-700 rounded-xl border border-purple-200 transition cursor-pointer flex items-center gap-1 text-xs font-bold shadow-2xs"
+                          >
+                            <Edit2 className="w-3.5 h-3.5 text-purple-600" />
+                            <span className="hidden sm:inline">Edit Letter</span>
+                          </button>
+                        )}
+
                         <button
                           onClick={() => handleOpenPrintPrescription(rx)}
                           title="Print Prescription Slip"
-                          className="p-2 bg-slate-50 hover:bg-slate-100 text-slate-600 rounded-xl border border-slate-200 transition cursor-pointer flex items-center gap-1 text-xs font-bold"
+                          className="px-2.5 py-2 bg-slate-50 hover:bg-slate-100 text-slate-600 rounded-xl border border-slate-200 transition cursor-pointer flex items-center gap-1 text-xs font-bold"
                         >
                           <Printer className="w-3.5 h-3.5" />
                           <span className="hidden sm:inline">Print Rx</span>
                         </button>
+
+                        {(isAdmin || isDoctor) && rx.status !== 'Dispensed' && rx.payment_status !== 'Paid' && (
+                          <button
+                            onClick={() => handleDeletePrescription(rx._id)}
+                            title="Delete / Cancel Prescription"
+                            className="p-2 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-xl border border-rose-200 transition cursor-pointer flex items-center gap-1 text-xs font-bold"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
 
                         {isCashier && rx.payment_status !== 'Paid' && (
                           <button
@@ -1580,10 +1537,13 @@ const PharmacyManager = () => {
       {/* ========================================================================= */}
       <Modal
         isOpen={isPrescribeModalOpen}
-        onClose={() => setIsPrescribeModalOpen(false)}
-        icon={Stethoscope}
-        title="Write Patient Prescription"
-        subtitle="Prescribe with dose, frequency, duration, PRN, food relation, and clinical allergy check."
+        onClose={() => {
+          setIsPrescribeModalOpen(false);
+          setEditingPrescription(null);
+        }}
+        icon={editingPrescription ? Edit2 : Stethoscope}
+        title={editingPrescription ? `Edit Medicine Letter: ${editingPrescription.prescription_number}` : "Write Patient Prescription"}
+        subtitle={editingPrescription ? `Update medications, dosage, directions, and pricing for ${selectedVisitPatient?.name || 'Patient'}` : "Prescribe with dose, frequency, duration, PRN, food relation, and clinical allergy check."}
         maxWidth="max-w-3xl"
       >
         <form onSubmit={(e) => e.preventDefault()} className="space-y-4 text-xs">
@@ -1659,36 +1619,6 @@ const PharmacyManager = () => {
               </div>
             </div>
           )}
-
-          {/* Preset Quick Chips */}
-          <div>
-            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1.5">
-              1-Click Dental Presets:
-            </span>
-            <div className="flex flex-wrap gap-1.5">
-              {COMMON_PRESETS.map((p, pIdx) => {
-                const allergyConflict = getAllergyConflict(p.medicine_name);
-                return (
-                  <button
-                    key={pIdx}
-                    type="button"
-                    onClick={() => handleAddPresetItem(p)}
-                    className={`px-2.5 py-1 rounded-xl text-[10px] font-bold border transition cursor-pointer flex items-center gap-1 ${
-                      allergyConflict
-                        ? 'bg-rose-50 text-rose-900 border-rose-300 hover:bg-rose-100'
-                        : p.is_injection
-                        ? 'bg-amber-50 text-amber-900 border-amber-300 hover:bg-amber-100'
-                        : 'bg-purple-50 hover:bg-purple-100 text-purple-900 border-purple-200'
-                    }`}
-                  >
-                    {allergyConflict ? <ShieldAlert className="w-3 h-3 text-rose-600" /> : <Plus className="w-3 h-3 text-purple-600" />}
-                    <span>{p.medicine_name} {p.dosage} ({p.frequency})</span>
-                    {p.is_injection && <span className="text-[9px] text-amber-700 font-mono">[Inj]</span>}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
 
           {/* Prescribed Items Dynamic List */}
           <div className="space-y-3 max-h-80 overflow-y-auto pr-1">
@@ -1942,7 +1872,10 @@ const PharmacyManager = () => {
           <div className="flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-2 pt-3 border-t border-slate-100">
             <button
               type="button"
-              onClick={() => setIsPrescribeModalOpen(false)}
+              onClick={() => {
+                setIsPrescribeModalOpen(false);
+                setEditingPrescription(null);
+              }}
               className="px-4 py-2 bg-slate-100 hover:bg-slate-200 font-bold rounded-xl text-xs transition cursor-pointer"
             >
               Cancel
@@ -1958,7 +1891,11 @@ const PharmacyManager = () => {
               >
                 <div className="flex items-center gap-1.5">
                   <ClipboardList className="w-3.5 h-3.5" />
-                  <span>{submitting ? 'Saving...' : 'Save to Patient Record'}</span>
+                  <span>
+                    {editingPrescription
+                      ? (submitting ? 'Updating...' : 'Update & Save to Record')
+                      : (submitting ? 'Saving...' : 'Save to Patient Record')}
+                  </span>
                 </div>
                 <span className="text-[9px] font-normal text-purple-600 mt-0.5">Patient buys externally • $0.00 bill</span>
               </button>
@@ -1972,7 +1909,11 @@ const PharmacyManager = () => {
               >
                 <div className="flex items-center gap-1.5">
                   <Send className="w-3.5 h-3.5" />
-                  <span>{submitting ? 'Sending...' : 'Send to Cashier'}</span>
+                  <span>
+                    {editingPrescription
+                      ? (submitting ? 'Updating...' : 'Update & Bill Cashier')
+                      : (submitting ? 'Sending...' : 'Send to Cashier')}
+                  </span>
                 </div>
                 <span className="text-[9px] font-normal text-purple-200 mt-0.5">Bill through facility • Add to invoice</span>
               </button>

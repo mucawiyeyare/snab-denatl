@@ -530,3 +530,237 @@ export const dispensePrescription = async (req, res, next) => {
     next(error);
   }
 };
+
+// @desc    Update prescription (edit medicine letter / prescription)
+// @route   PUT /api/prescriptions/:id
+// @access  Private (Doctor, Admin)
+export const updatePrescription = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { items = [], notes, destination } = req.body;
+
+    const prescription = await Prescription.findById(id).populate('patient_id');
+    if (!prescription) {
+      return res.status(404).json({ success: false, message: 'Prescription not found' });
+    }
+
+    if (!Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({ success: false, message: 'Please include at least one medication in the prescription' });
+    }
+
+    const patientDoc = prescription.patient_id;
+    const patientAllergies = (patientDoc?.medical_info?.allergies || []).map(a => a.toLowerCase().trim());
+
+    const processedItems = [];
+    let grandTotal = 0;
+    const allergyWarnings = [];
+    const isRecordOnly = destination ? destination === 'record_only' : prescription.status === 'Record_Only';
+
+    for (const it of items) {
+      if (!it.medicine_name && !it.medicine_id) continue;
+
+      let medDoc = null;
+      if (it.medicine_id) {
+        medDoc = await Medicine.findById(it.medicine_id);
+      }
+      if (!medDoc && it.medicine_name) {
+        const cleanName = it.medicine_name.split('(')[0].split('-')[0].trim();
+        medDoc = await Medicine.findOne({
+          $or: [
+            { name: new RegExp('^' + it.medicine_name.trim() + '$', 'i') },
+            { generic_name: new RegExp('^' + it.medicine_name.trim() + '$', 'i') },
+            { name: new RegExp('^' + cleanName + '$', 'i') },
+            { generic_name: new RegExp('^' + cleanName + '$', 'i') },
+            { name: new RegExp(cleanName, 'i') },
+            { generic_name: new RegExp(cleanName, 'i') }
+          ]
+        });
+      }
+
+      const medName = it.medicine_name || medDoc?.name || 'Medication';
+      const genericName = (medDoc?.generic_name || it.generic_name || '').toLowerCase();
+      const dosage = it.dosage || medDoc?.strength || '500 mg';
+      const frequency = it.frequency || '3x daily';
+      const duration = it.duration || '5 days';
+      const qty = Number(it.quantity) || 1;
+      const unitPrice = it.unit_price !== undefined && !isNaN(Number(it.unit_price))
+        ? Number(it.unit_price)
+        : (medDoc?.unit_price || 0);
+      const itemTotal = Number((qty * unitPrice).toFixed(2));
+
+      // Allergy conflict cross-check
+      let isAllergic = false;
+      let allergyConflictName = '';
+      const combinedDrugName = `${medName.toLowerCase()} ${genericName}`;
+
+      for (const al of patientAllergies) {
+        if (al && (combinedDrugName.includes(al) || (al === 'penicillin' && (combinedDrugName.includes('amox') || combinedDrugName.includes('augmentin') || combinedDrugName.includes('ampicillin'))))) {
+          isAllergic = true;
+          allergyConflictName = al;
+          allergyWarnings.push(`⚠️ ALLERGY ALERT: Patient is allergic to "${al}" (Matched: ${medName})`);
+          break;
+        }
+      }
+
+      grandTotal += itemTotal;
+
+      const isInjection = Boolean(it.is_injection || medDoc?.is_injection || it.dosage_form?.toLowerCase().includes('injection'));
+
+      processedItems.push({
+        medicine_id: medDoc?._id || it.medicine_id || null,
+        medicine_name: medName,
+        dosage,
+        frequency,
+        duration,
+        quantity: qty,
+        unit_price: unitPrice,
+        total_price: itemTotal,
+        instructions: it.instructions || medDoc?.instructions_default || 'Take after meals as directed',
+        prn: Boolean(it.prn),
+        prn_reason: it.prn_reason || '',
+        food_relation: it.food_relation || 'After Meals',
+        route: it.route || medDoc?.route_of_administration || (isInjection ? 'Intramuscular (IM)' : 'Oral'),
+        is_injection: isInjection,
+        injection_details: it.injection_details || '',
+        allergy_warning_flag: isAllergic,
+        allergy_note: isAllergic ? `Patient allergy conflict: ${allergyConflictName}` : '',
+        is_purchased: it.is_purchased || false,
+        status: isRecordOnly ? 'Record_Only' : (it.status || prescription.status || 'Pending')
+      });
+    }
+
+    prescription.items = processedItems;
+    prescription.total_amount = Number(grandTotal.toFixed(2));
+    if (notes !== undefined) prescription.notes = notes;
+    if (destination) {
+      prescription.status = isRecordOnly ? 'Record_Only' : (prescription.status === 'Record_Only' ? 'Pending' : prescription.status);
+      prescription.payment_status = isRecordOnly ? 'External' : (prescription.payment_status === 'External' ? 'Unpaid' : prescription.payment_status);
+    }
+    await prescription.save();
+
+    // Reconcile with Visit Invoice if prescription was billed
+    if (prescription.visit_id) {
+      let invoice = await Invoice.findOne({ visit_id: prescription.visit_id });
+      if (invoice) {
+        // Remove old line items for this prescription
+        invoice.items = invoice.items.filter(
+          it => !(it.item_type === 'Pharmacy' && String(it.reference_id) === String(prescription._id))
+        );
+
+        if (!isRecordOnly && grandTotal > 0) {
+          for (const it of processedItems) {
+            invoice.items.push({
+              item_type: 'Pharmacy',
+              reference_id: prescription._id,
+              description: `Pharmacy: ${it.medicine_name} (${it.dosage || ''}) - Qty: ${it.quantity}`,
+              quantity: it.quantity,
+              unit_price: it.unit_price,
+              total_price: it.total_price,
+              paid_status: prescription.payment_status === 'Paid' ? 'Paid' : 'Unpaid'
+            });
+          }
+        }
+
+        invoice.subtotal = invoice.items.reduce((acc, item) => acc + item.total_price, 0);
+        invoice.total_amount = Math.max(0, invoice.subtotal - (invoice.discount || 0));
+        invoice.balance = Math.max(0, invoice.total_amount - (invoice.paid_amount || 0));
+
+        if (invoice.balance === 0 && (invoice.paid_amount || 0) > 0) {
+          invoice.status = 'Paid';
+        } else if ((invoice.paid_amount || 0) > 0) {
+          invoice.status = 'Partially Paid';
+        } else {
+          invoice.status = 'Unpaid';
+        }
+        await invoice.save();
+      }
+    }
+
+    await logAudit({
+      user: req.user,
+      action: 'UPDATE_PRESCRIPTION',
+      entity: 'Prescription',
+      entity_id: prescription._id,
+      details: {
+        prescription_number: prescription.prescription_number,
+        total_amount: grandTotal,
+        items_count: processedItems.length
+      }
+    });
+
+    const populated = await Prescription.findById(prescription._id)
+      .populate('patient_id', 'name patient_number telephone gender age')
+      .populate('doctor_id', 'full_name username')
+      .populate('visit_id', 'visit_number status')
+      .populate('items.medicine_id');
+
+    res.json({
+      success: true,
+      message: `Prescription ${prescription.prescription_number} updated successfully!`,
+      allergy_warnings: allergyWarnings,
+      data: populated
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Delete / Cancel prescription
+// @route   DELETE /api/prescriptions/:id
+// @access  Private (Doctor, Admin)
+export const deletePrescription = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const prescription = await Prescription.findById(id);
+    if (!prescription) {
+      return res.status(404).json({ success: false, message: 'Prescription not found' });
+    }
+
+    if (prescription.status === 'Dispensed' || prescription.payment_status === 'Paid') {
+      return res.status(400).json({
+        success: false,
+        message: 'Cannot delete an already dispensed or paid prescription'
+      });
+    }
+
+    // Remove invoice line items if present
+    if (prescription.visit_id) {
+      let invoice = await Invoice.findOne({ visit_id: prescription.visit_id });
+      if (invoice) {
+        invoice.items = invoice.items.filter(
+          it => !(it.item_type === 'Pharmacy' && String(it.reference_id) === String(prescription._id))
+        );
+        invoice.subtotal = invoice.items.reduce((acc, item) => acc + item.total_price, 0);
+        invoice.total_amount = Math.max(0, invoice.subtotal - (invoice.discount || 0));
+        invoice.balance = Math.max(0, invoice.total_amount - (invoice.paid_amount || 0));
+        if (invoice.balance === 0 && (invoice.paid_amount || 0) > 0) {
+          invoice.status = 'Paid';
+        } else if ((invoice.paid_amount || 0) > 0) {
+          invoice.status = 'Partially Paid';
+        } else {
+          invoice.status = 'Unpaid';
+        }
+        await invoice.save();
+      }
+    }
+
+    await logAudit({
+      user: req.user,
+      action: 'DELETE_PRESCRIPTION',
+      entity: 'Prescription',
+      entity_id: prescription._id,
+      details: {
+        prescription_number: prescription.prescription_number
+      }
+    });
+
+    await Prescription.findByIdAndDelete(id);
+
+    res.json({
+      success: true,
+      message: `Prescription ${prescription.prescription_number} removed successfully.`
+    });
+  } catch (error) {
+    next(error);
+  }
+};

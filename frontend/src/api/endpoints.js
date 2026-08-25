@@ -112,6 +112,8 @@ export const deleteMedicineApi = (id) => api.delete(`/medicines/${id}`);
 export const getPrescriptionsApi = (params) => api.get('/prescriptions', { params });
 export const getPrescriptionByIdApi = (id) => api.get(`/prescriptions/${id}`);
 export const createPrescriptionApi = (data) => api.post('/prescriptions', data);
+export const updatePrescriptionApi = (id, data) => api.put(`/prescriptions/${id}`, data);
+export const deletePrescriptionApi = (id) => api.delete(`/prescriptions/${id}`);
 export const dispensePrescriptionApi = (id, data) => api.post(`/prescriptions/${id}/dispense`, data);
 export const getPharmacyReportsApi = () => api.get('/medicines/reports/sales-analytics');
 
