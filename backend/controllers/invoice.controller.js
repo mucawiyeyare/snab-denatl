@@ -1,5 +1,8 @@
 import Invoice from '../models/Invoice.js';
 import Visit from '../models/Visit.js';
+import Payment from '../models/Payment.js';
+import LabRequest from '../models/LabRequest.js';
+import Treatment from '../models/Treatment.js';
 import { logAudit } from '../middleware/audit.js';
 
 export const getInvoices = async (req, res, next) => {
@@ -93,28 +96,49 @@ export const applyDiscount = async (req, res, next) => {
 
     const discountAmount = Number(discount) || 0;
     invoice.discount = discountAmount;
-    invoice.total_amount = Math.max(0, invoice.subtotal - discountAmount);
-    invoice.balance = Math.max(0, invoice.total_amount - invoice.paid_amount);
+    invoice.total_amount = Math.max(0, (invoice.subtotal || 0) - discountAmount);
 
-    if (invoice.balance === 0 && invoice.total_amount > 0) {
+    if (invoice.total_amount <= 0) {
+      invoice.total_amount = 0;
+      invoice.paid_amount = 0;
+      invoice.balance = 0;
       invoice.status = 'Paid';
-      invoice.items.forEach(item => { item.paid_status = 'Paid'; });
-      await LabRequest.updateMany(
-        { visit_id: invoice.visit_id, payment_status: 'Unpaid' },
-        { payment_status: 'Paid' }
-      );
-      await LabRequest.updateMany(
-        { visit_id: invoice.visit_id, status: 'Payment Required' },
-        { status: 'Paid' }
-      );
-      await Treatment.updateMany(
-        { visit_id: invoice.visit_id },
-        { payment_status: 'Paid' }
-      );
-    } else if (invoice.paid_amount > 0 && invoice.balance > 0) {
-      invoice.status = 'Partially Paid';
+      if (invoice.items && invoice.items.length > 0) {
+        invoice.items.forEach(item => { item.paid_status = 'Paid'; });
+      }
+      await Payment.deleteMany({ invoice_id: invoice._id });
     } else {
-      invoice.status = 'Unpaid';
+      if ((invoice.paid_amount || 0) > invoice.total_amount) {
+        invoice.paid_amount = invoice.total_amount;
+      }
+      invoice.balance = Math.max(0, invoice.total_amount - (invoice.paid_amount || 0));
+
+      if (invoice.balance === 0) {
+        invoice.status = 'Paid';
+        if (invoice.items && invoice.items.length > 0) {
+          invoice.items.forEach(item => { item.paid_status = 'Paid'; });
+        }
+      } else if (invoice.paid_amount > 0) {
+        invoice.status = 'Partially Paid';
+      } else {
+        invoice.status = 'Unpaid';
+      }
+
+      // Reconcile payments
+      const existingPayments = await Payment.find({ invoice_id: invoice._id }).sort({ payment_date: -1 });
+      let runningAllowed = invoice.paid_amount;
+      for (const p of existingPayments) {
+        if (runningAllowed <= 0) {
+          await Payment.findByIdAndDelete(p._id);
+        } else if (p.amount > runningAllowed) {
+          p.amount = runningAllowed;
+          p.remaining_balance = invoice.balance;
+          await p.save();
+          runningAllowed = 0;
+        } else {
+          runningAllowed -= p.amount;
+        }
+      }
     }
 
     await invoice.save();
@@ -162,15 +186,51 @@ export const updateInvoice = async (req, res, next) => {
       invoice.discount = Math.max(0, Number(discount) || 0);
     }
 
-    invoice.total_amount = Math.max(0, invoice.subtotal - (invoice.discount || 0));
-    invoice.balance = Math.max(0, invoice.total_amount - (invoice.paid_amount || 0));
+    invoice.total_amount = Math.max(0, (invoice.subtotal || 0) - (invoice.discount || 0));
 
-    if (invoice.balance <= 0 && invoice.total_amount > 0) {
+    // Reconcile paid amounts and payments when invoice total changes
+    if (invoice.total_amount <= 0) {
+      invoice.total_amount = 0;
+      invoice.paid_amount = 0;
+      invoice.balance = 0;
       invoice.status = 'Paid';
-    } else if (invoice.paid_amount > 0 && invoice.balance > 0) {
-      invoice.status = 'Partially Paid';
+      if (invoice.items && invoice.items.length > 0) {
+        invoice.items.forEach(item => { item.paid_status = 'Paid'; });
+      }
+      // Remove any payments linked to this $0 invoice so revenue reports don't count ghost money
+      await Payment.deleteMany({ invoice_id: invoice._id });
     } else {
-      invoice.status = status || (invoice.balance <= 0 ? 'Paid' : 'Unpaid');
+      if ((invoice.paid_amount || 0) > invoice.total_amount) {
+        invoice.paid_amount = invoice.total_amount;
+      }
+      invoice.balance = Math.max(0, invoice.total_amount - (invoice.paid_amount || 0));
+
+      if (invoice.balance <= 0) {
+        invoice.status = 'Paid';
+        if (invoice.items && invoice.items.length > 0) {
+          invoice.items.forEach(item => { item.paid_status = 'Paid'; });
+        }
+      } else if (invoice.paid_amount > 0) {
+        invoice.status = 'Partially Paid';
+      } else {
+        invoice.status = status || 'Unpaid';
+      }
+
+      // Reconcile associated payments so total payments do not exceed invoice.paid_amount
+      const payments = await Payment.find({ invoice_id: invoice._id }).sort({ payment_date: -1 });
+      let allowed = invoice.paid_amount;
+      for (const p of payments) {
+        if (allowed <= 0) {
+          await Payment.findByIdAndDelete(p._id);
+        } else if (p.amount > allowed) {
+          p.amount = allowed;
+          p.remaining_balance = invoice.balance;
+          await p.save();
+          allowed = 0;
+        } else {
+          allowed -= p.amount;
+        }
+      }
     }
 
     await invoice.save();
@@ -185,6 +245,7 @@ export const updateInvoice = async (req, res, next) => {
         subtotal: invoice.subtotal,
         discount: invoice.discount,
         total_amount: invoice.total_amount,
+        paid_amount: invoice.paid_amount,
         balance: invoice.balance,
         items_count: invoice.items.length
       }
@@ -224,11 +285,13 @@ export const deleteInvoice = async (req, res, next) => {
       details: { invoice_number: invoice.invoice_number }
     });
 
+    // Clean up any payments linked to this deleted invoice
+    await Payment.deleteMany({ invoice_id: invoice._id });
     await Invoice.findByIdAndDelete(req.params.id);
 
     res.json({
       success: true,
-      message: 'Invoice deleted successfully'
+      message: 'Invoice and associated payments deleted successfully'
     });
   } catch (error) {
     next(error);

@@ -1,10 +1,10 @@
-﻿import paramiko, time, sys, io, re
+import paramiko, time, sys, io, re
 
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
 
 HOST = "63.142.251.246"
 USER = "snabdental"
-PASS = "123456snabdenal34"
+PASSWORDS = ["123456abdi", "123456snabdenal34", "123456snabdental34"]
 DOMAIN = "snabdental.iftiinhub.com"
 
 def clean(t): return re.sub(r"\x1b\[[0-9;]*[mGKHF]","",t)
@@ -28,11 +28,18 @@ def run(ssh, cmd, timeout=300):
 print("Connecting to server...")
 ssh=paramiko.SSHClient()
 ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-try:
-    ssh.connect(HOST, 22, USER, PASS, timeout=15)
-    print(f"Connected to {HOST} successfully!")
-except Exception as e:
-    print(f"Connection failed: {e}")
+connected = False
+for p in PASSWORDS:
+    try:
+        ssh.connect(HOST, 22, USER, p, timeout=12)
+        print(f"Connected to {HOST} successfully!")
+        connected = True
+        break
+    except Exception as e:
+        print(f"Auth attempt failed for {p[:4]}***: {e}")
+
+if not connected:
+    print("Could not connect with any known password.")
     sys.exit(1)
 
 print("\n=== 1. Git pull latest code from GitHub ===")

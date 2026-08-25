@@ -15,8 +15,71 @@ import Medicine from '../models/Medicine.js';
 import Prescription from '../models/Prescription.js';
 import { getDoctorAssignedPatientIds } from '../utils/doctorScope.js';
 
+export const reconcileInvoicesAndPayments = async () => {
+  try {
+    // 1. Invoices with total_amount <= 0
+    const zeroInvoices = await Invoice.find({ total_amount: { $lte: 0 } });
+    for (const inv of zeroInvoices) {
+      let changed = false;
+      if (inv.paid_amount !== 0) {
+        inv.paid_amount = 0;
+        changed = true;
+      }
+      if (inv.balance !== 0) {
+        inv.balance = 0;
+        changed = true;
+      }
+      if (inv.status !== 'Paid') {
+        inv.status = 'Paid';
+        changed = true;
+      }
+      if (changed) {
+        await inv.save();
+      }
+      await Payment.deleteMany({ invoice_id: inv._id });
+    }
+
+    // 2. Invoices where paid_amount > total_amount
+    const overpaidInvoices = await Invoice.find({ $expr: { $gt: ['$paid_amount', '$total_amount'] } });
+    for (const inv of overpaidInvoices) {
+      inv.paid_amount = Math.max(0, inv.total_amount);
+      inv.balance = 0;
+      inv.status = 'Paid';
+      await inv.save();
+
+      const payments = await Payment.find({ invoice_id: inv._id }).sort({ payment_date: -1 });
+      let allowed = inv.paid_amount;
+      for (const p of payments) {
+        if (allowed <= 0) {
+          await Payment.findByIdAndDelete(p._id);
+        } else if (p.amount > allowed) {
+          p.amount = allowed;
+          p.remaining_balance = 0;
+          await p.save();
+          allowed = 0;
+        } else {
+          allowed -= p.amount;
+        }
+      }
+    }
+
+    // 3. Remove orphan payments whose invoice no longer exists
+    const allPayments = await Payment.find({ invoice_id: { $exists: true, $ne: null } });
+    for (const p of allPayments) {
+      const invExists = await Invoice.exists({ _id: p.invoice_id });
+      if (!invExists) {
+        await Payment.findByIdAndDelete(p._id);
+      }
+    }
+  } catch (err) {
+    console.error('[Reconciliation Error]:', err);
+  }
+};
+
 export const getDashboardStats = async (req, res, next) => {
   try {
+    await reconcileInvoicesAndPayments();
+
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const endToday = new Date();
@@ -544,6 +607,8 @@ export const globalSearch = async (req, res, next) => {
 // @access  Private (Admin, Cashier)
 export const getDailyIncomeReport = async (req, res, next) => {
   try {
+    await reconcileInvoicesAndPayments();
+
     const { date } = req.query;
     const targetDate = date ? new Date(date) : new Date();
     
@@ -652,6 +717,8 @@ export const getDailyIncomeReport = async (req, res, next) => {
 // @access  Private (Admin)
 export const getFinancialSummaryReport = async (req, res, next) => {
   try {
+    await reconcileInvoicesAndPayments();
+
     const targetYear = req.query.year ? parseInt(req.query.year, 10) : new Date().getFullYear();
     const prevYear = targetYear - 1;
 
