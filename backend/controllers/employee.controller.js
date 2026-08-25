@@ -1,4 +1,5 @@
 import Employee from '../models/Employee.js';
+import { generateEmployeeCode } from '../utils/generateId.js';
 import { logAudit } from '../middleware/audit.js';
 
 export const getEmployees = async (req, res, next) => {
@@ -38,8 +39,7 @@ export const getEmployeeById = async (req, res, next) => {
 
 export const createEmployee = async (req, res, next) => {
   try {
-    const count = await Employee.countDocuments();
-    const autoId = `EMP-${(count + 1).toString().padStart(3, '0')}`;
+    const autoId = await generateEmployeeCode();
 
     const employee = await Employee.create({
       employee_id: req.body.employee_id || autoId,

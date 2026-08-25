@@ -6,59 +6,57 @@ import LabRequest from '../models/LabRequest.js';
 import Prescription from '../models/Prescription.js';
 import Medicine from '../models/Medicine.js';
 import Expense from '../models/Expense.js';
+import Employee from '../models/Employee.js';
+import DentalService from '../models/DentalService.js';
+import DentalInventory from '../models/DentalInventory.js';
+import LabTest from '../models/LabTest.js';
 
-export const generatePatientNumber = async () => {
-  const count = await Patient.countDocuments();
-  const nextNum = (count + 1).toString().padStart(4, '0');
-  return `PAT-${nextNum}`;
-};
-
-export const generateVisitNumber = async () => {
+/**
+ * Robust unique code/number generator.
+ * Finds all existing codes with matching prefix, extracts the highest number,
+ * increments it, and checks existence in a loop to guarantee zero duplicate collisions.
+ */
+async function generateUniqueCode(model, field, prefix, padLength = 4, yearPrefix = false) {
   const year = new Date().getFullYear();
-  const count = await Visit.countDocuments();
-  const nextNum = (count + 1).toString().padStart(4, '0');
-  return `VIS-${year}-${nextNum}`;
-};
+  const basePrefix = yearPrefix ? `${prefix}-${year}-` : `${prefix}-`;
+  const escapedBase = basePrefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const regex = new RegExp(`^${escapedBase}(\\d+)`);
 
-export const generateReceiptNumber = async () => {
-  const year = new Date().getFullYear();
-  const count = await Payment.countDocuments();
-  const nextNum = (count + 1).toString().padStart(5, '0');
-  return `REC-${year}-${nextNum}`;
-};
+  const existingDocs = await model.find({ [field]: regex }).select(field).lean();
+  let maxNum = 0;
+  for (const doc of existingDocs) {
+    const val = doc[field];
+    if (typeof val === 'string') {
+      const match = val.match(regex);
+      if (match && match[1]) {
+        const num = parseInt(match[1], 10);
+        if (!isNaN(num) && num > maxNum) {
+          maxNum = num;
+        }
+      }
+    }
+  }
 
-export const generateInvoiceNumber = async () => {
-  const year = new Date().getFullYear();
-  const count = await Invoice.countDocuments();
-  const nextNum = (count + 1).toString().padStart(5, '0');
-  return `INV-${year}-${nextNum}`;
-};
+  let nextNum = maxNum + 1;
+  let candidate = `${basePrefix}${nextNum.toString().padStart(padLength, '0')}`;
 
-export const generateLabRequestNumber = async () => {
-  const year = new Date().getFullYear();
-  const count = await LabRequest.countDocuments();
-  const nextNum = (count + 1).toString().padStart(4, '0');
-  return `LAB-${year}-${nextNum}`;
-};
+  while (await model.exists({ [field]: candidate })) {
+    nextNum++;
+    candidate = `${basePrefix}${nextNum.toString().padStart(padLength, '0')}`;
+  }
 
-export const generatePrescriptionNumber = async () => {
-  const year = new Date().getFullYear();
-  const count = await Prescription.countDocuments();
-  const nextNum = (count + 1).toString().padStart(4, '0');
-  return `RX-${year}-${nextNum}`;
-};
+  return candidate;
+}
 
-export const generateMedicineCode = async () => {
-  const count = await Medicine.countDocuments();
-  const nextNum = (count + 1).toString().padStart(3, '0');
-  return `MED-${nextNum}`;
-};
-
-export const generateExpenseCode = async () => {
-  const year = new Date().getFullYear();
-  const count = await Expense.countDocuments();
-  const nextNum = (count + 1).toString().padStart(5, '0');
-  return `EXP-${year}-${nextNum}`;
-};
-
-
+export const generatePatientNumber = () => generateUniqueCode(Patient, 'patient_number', 'PAT', 4, false);
+export const generateVisitNumber = () => generateUniqueCode(Visit, 'visit_number', 'VIS', 4, true);
+export const generateReceiptNumber = () => generateUniqueCode(Payment, 'receipt_number', 'REC', 5, true);
+export const generateInvoiceNumber = () => generateUniqueCode(Invoice, 'invoice_number', 'INV', 5, true);
+export const generateLabRequestNumber = () => generateUniqueCode(LabRequest, 'request_number', 'LAB', 4, true);
+export const generatePrescriptionNumber = () => generateUniqueCode(Prescription, 'prescription_number', 'RX', 4, true);
+export const generateMedicineCode = () => generateUniqueCode(Medicine, 'medicine_code', 'MED', 3, false);
+export const generateExpenseCode = () => generateUniqueCode(Expense, 'expense_code', 'EXP', 5, true);
+export const generateEmployeeCode = () => generateUniqueCode(Employee, 'employee_id', 'EMP', 3, false);
+export const generateServiceCode = () => generateUniqueCode(DentalService, 'service_code', 'SRV', 3, false);
+export const generateInventoryCode = () => generateUniqueCode(DentalInventory, 'item_code', 'INV-MAT', 3, false);
+export const generateLabTestCode = () => generateUniqueCode(LabTest, 'test_code', 'LAB', 3, false);

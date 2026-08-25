@@ -1,4 +1,5 @@
 import DentalService from '../models/DentalService.js';
+import { generateServiceCode } from '../utils/generateId.js';
 import { logAudit } from '../middleware/audit.js';
 
 export const getDentalServices = async (req, res, next) => {
@@ -25,8 +26,7 @@ export const getDentalServices = async (req, res, next) => {
 
 export const createDentalService = async (req, res, next) => {
   try {
-    const count = await DentalService.countDocuments();
-    const service_code = req.body.service_code || `SRV-${(count + 1).toString().padStart(3, '0')}`;
+    const service_code = req.body.service_code || await generateServiceCode();
 
     const service = await DentalService.create({
       ...req.body,

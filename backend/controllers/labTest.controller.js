@@ -1,4 +1,5 @@
 import LabTest from '../models/LabTest.js';
+import { generateLabTestCode } from '../utils/generateId.js';
 import { logAudit } from '../middleware/audit.js';
 
 export const getLabTests = async (req, res, next) => {
@@ -25,8 +26,7 @@ export const getLabTests = async (req, res, next) => {
 
 export const createLabTest = async (req, res, next) => {
   try {
-    const count = await LabTest.countDocuments();
-    const test_code = req.body.test_code || `LAB-${(count + 1).toString().padStart(3, '0')}`;
+    const test_code = req.body.test_code || await generateLabTestCode();
 
     const test = await LabTest.create({
       ...req.body,

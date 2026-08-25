@@ -1,5 +1,6 @@
 import DentalInventory from '../models/DentalInventory.js';
 import DentalCategory from '../models/DentalCategory.js';
+import { generateInventoryCode } from '../utils/generateId.js';
 import { logAudit } from '../middleware/audit.js';
 
 export const getInventory = async (req, res, next) => {
@@ -56,8 +57,7 @@ export const getInventoryById = async (req, res, next) => {
 
 export const createInventoryItem = async (req, res, next) => {
   try {
-    const count = await DentalInventory.countDocuments();
-    const itemCode = `INV-MAT-${(count + 1).toString().padStart(3, '0')}`;
+    const itemCode = req.body.item_code || await generateInventoryCode();
 
     const item = new DentalInventory({
       item_code: itemCode,

@@ -125,9 +125,9 @@ const PatientList = () => {
     const timer = setTimeout(async () => {
       try {
         const res = await checkPatientPhoneApi(phone);
-        if (res.data?.available === false) {
-          setPhoneStatus('taken');
-          setPhoneMsg(res.data.message || 'This telephone number is already registered to another patient.');
+        if (res.data?.exists) {
+          setPhoneStatus('existing');
+          setPhoneMsg(res.data.message || `Telephone number is already registered to ${res.data.existingPatient?.name} (${res.data.existingPatient?.patient_number}).`);
           setExistingPatient(res.data.existingPatient);
         } else {
           setPhoneStatus('available');
@@ -230,10 +230,6 @@ const PatientList = () => {
 
   const handleRegisterSubmit = async (e) => {
     e.preventDefault();
-    if (phoneStatus === 'taken') {
-      setFormError('This telephone number is already registered to another patient.');
-      return;
-    }
     if (!formData.doctor_id) {
       setFormError('Please select an assigned doctor.');
       return;
@@ -705,8 +701,8 @@ const PatientList = () => {
                                 onChange={(e) => pf('telephone', e.target.value)}
                                 placeholder="e.g. +252 61 7000000"
                                 className={`w-full px-3.5 py-2 rounded-xl border text-xs text-slate-800 placeholder:text-slate-400 focus:outline-none transition ${
-                                  phoneStatus === 'taken'
-                                    ? 'border-rose-500 ring-1 ring-rose-500 bg-rose-50/10'
+                                  phoneStatus === 'existing'
+                                    ? 'border-amber-400 ring-1 ring-amber-200 bg-amber-50/20'
                                     : phoneStatus === 'available'
                                     ? 'border-emerald-500 ring-1 ring-emerald-100 bg-white focus:border-emerald-600'
                                     : 'border-slate-200 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white'
@@ -719,22 +715,65 @@ const PatientList = () => {
                               )}
                             </div>
 
-                            {/* Real-time Phone Validation Feedback */}
-                            {phoneStatus === 'taken' && (
-                              <div className="mt-1 space-y-0.5 animate-in fade-in duration-150">
-                                <p className="text-[10px] font-semibold text-rose-600 flex items-center gap-1">
-                                  <AlertCircle className="w-3 h-3 shrink-0" />
-                                  <span>{phoneMsg || 'This telephone number is already registered to another patient.'}</span>
-                                </p>
-                                {existingPatient && (
+                            {/* Real-time Phone Validation Feedback & Existing Patient Action Bar */}
+                            {phoneStatus === 'existing' && existingPatient && (
+                              <div className="mt-2 p-2.5 bg-amber-50/90 border border-amber-200 rounded-xl space-y-2 animate-in fade-in duration-150">
+                                <div className="flex items-start gap-1.5 text-xs text-amber-900">
+                                  <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                                  <div>
+                                    <span className="font-bold text-[11px]">
+                                      Number already exists: {existingPatient.name} ({existingPatient.patient_number})
+                                    </span>
+                                    <p className="text-[10px] text-amber-700 mt-0.5">
+                                      Use existing profile, or continue below to register a new patient sharing this number.
+                                    </p>
+                                  </div>
+                                </div>
+
+                                <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+                                  <button
+                                    type="button"
+                                    onClick={() => openNewVisit(existingPatient)}
+                                    className="px-2.5 py-1 bg-blue-600 hover:bg-blue-700 text-white font-bold text-[11px] rounded-lg transition shadow-2xs cursor-pointer"
+                                  >
+                                    + Start Visit for {existingPatient.name}
+                                  </button>
                                   <button
                                     type="button"
                                     onClick={() => navigate(`/patients/${existingPatient._id}`)}
-                                    className="inline-flex items-center gap-1 text-[10px] font-bold text-blue-600 hover:text-blue-800 hover:underline cursor-pointer"
+                                    className="px-2.5 py-1 bg-slate-200/80 hover:bg-slate-300 text-slate-800 font-bold text-[11px] rounded-lg transition cursor-pointer"
                                   >
-                                    <span>View Existing Patient ({existingPatient.name} – {existingPatient.patient_number}) →</span>
+                                    View Profile
                                   </button>
-                                )}
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setFormData((prev) => ({
+                                        ...prev,
+                                        name: existingPatient.name || prev.name,
+                                        age: existingPatient.age || prev.age,
+                                        gender: existingPatient.gender || prev.gender,
+                                        address: existingPatient.address || prev.address,
+                                        emergency_contact: existingPatient.emergency_contact || prev.emergency_contact,
+                                        medical_info: {
+                                          blood_group: existingPatient.medical_info?.blood_group || prev.medical_info?.blood_group || '',
+                                          allergies: Array.isArray(existingPatient.medical_info?.allergies)
+                                            ? existingPatient.medical_info.allergies.join(', ')
+                                            : existingPatient.medical_info?.allergies || prev.medical_info?.allergies || '',
+                                          chronic_conditions: Array.isArray(existingPatient.medical_info?.chronic_conditions)
+                                            ? existingPatient.medical_info.chronic_conditions.join(', ')
+                                            : existingPatient.medical_info?.chronic_conditions || prev.medical_info?.chronic_conditions || '',
+                                          bleeding_disorder: existingPatient.medical_info?.bleeding_disorder ?? prev.medical_info?.bleeding_disorder ?? false,
+                                          pregnant: existingPatient.medical_info?.pregnant ?? prev.medical_info?.pregnant ?? false,
+                                          notes: existingPatient.medical_info?.notes || prev.medical_info?.notes || ''
+                                        }
+                                      }));
+                                    }}
+                                    className="px-2.5 py-1 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 font-bold text-[11px] rounded-lg transition cursor-pointer"
+                                  >
+                                    Load Data
+                                  </button>
+                                </div>
                               </div>
                             )}
 

@@ -14,6 +14,10 @@ import { generatePatientNumber } from '../utils/generateId.js';
 import { logAudit } from '../middleware/audit.js';
 import { getDoctorAssignedPatientIds, isPatientAssignedToDoctor } from '../utils/doctorScope.js';
 
+function escapeRegex(text) {
+  return text.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&');
+}
+
 export const getPatients = async (req, res, next) => {
   try {
     const { search, limit = 50, page = 1 } = req.query;
@@ -26,7 +30,8 @@ export const getPatients = async (req, res, next) => {
     }
 
     if (search && search.trim()) {
-      const searchRegex = { $regex: search.trim(), $options: 'i' };
+      const cleanSearch = escapeRegex(search.trim());
+      const searchRegex = { $regex: cleanSearch, $options: 'i' };
       const searchConditions = [
         { name: searchRegex },
         { telephone: searchRegex },
@@ -94,24 +99,34 @@ export const checkTelephoneAvailability = async (req, res, next) => {
   try {
     const { phone } = req.query;
     if (!phone || !phone.trim()) {
-      return res.json({ available: true });
+      return res.json({ available: true, exists: false });
     }
     const cleanPhone = phone.trim();
-    const existing = await Patient.findOne({ telephone: cleanPhone });
+    const existing = await Patient.findOne({ telephone: cleanPhone })
+      .populate('assigned_doctor_id', 'full_name username email');
     if (existing) {
       return res.json({
-        available: false,
-        message: 'This telephone number is already registered to another patient.',
+        available: true,
+        exists: true,
+        message: `Telephone number is already registered to ${existing.name} (${existing.patient_number}).`,
         existingPatient: {
           _id: existing._id,
           name: existing.name,
           patient_number: existing.patient_number,
-          telephone: existing.telephone
+          telephone: existing.telephone,
+          age: existing.age,
+          gender: existing.gender,
+          address: existing.address,
+          assigned_doctor_id: existing.assigned_doctor_id?._id || existing.assigned_doctor_id,
+          assigned_doctor_name: existing.assigned_doctor_name || existing.assigned_doctor_id?.full_name || '',
+          emergency_contact: existing.emergency_contact,
+          medical_info: existing.medical_info
         }
       });
     }
     return res.json({
       available: true,
+      exists: false,
       message: 'Telephone number is available.'
     });
   } catch (error) {
@@ -138,20 +153,6 @@ export const createPatient = async (req, res, next) => {
     }
 
     const cleanPhone = telephone.trim();
-    const existing = await Patient.findOne({ telephone: cleanPhone });
-    if (existing) {
-      return res.status(400).json({
-        success: false,
-        message: 'This telephone number is already registered to another patient.',
-        existingPatient: {
-          _id: existing._id,
-          name: existing.name,
-          patient_number: existing.patient_number,
-          telephone: existing.telephone
-        }
-      });
-    }
-
     const patient_number = await generatePatientNumber();
 
     // Determine assigned doctor
