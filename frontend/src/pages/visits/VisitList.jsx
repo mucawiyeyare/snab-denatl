@@ -1194,6 +1194,7 @@ const VisitList = () => {
               <input
                 type="number"
                 min="0"
+                step="any"
                 max={treatmentForm.price || 9999}
                 value={treatmentForm.discount || 0}
                 onChange={(e) => setTreatmentForm({ ...treatmentForm, discount: e.target.value })}

@@ -2038,7 +2038,7 @@ const PharmacyManager = () => {
                         type="number"
                         min="0"
                         max={subtotal}
-                        step="0.5"
+                        step="any"
                         value={dispenseDiscount}
                         onChange={(e) => {
                           const val = e.target.value;
@@ -2069,7 +2069,7 @@ const PharmacyManager = () => {
                       <button
                         type="button"
                         onClick={() => {
-                          const d = Math.round(subtotal * 0.1);
+                          const d = Math.round(subtotal * 0.1 * 100) / 100;
                           setDispenseDiscount(d);
                           setDispensePaidAmount(Math.max(0, subtotal - d));
                         }}
@@ -2094,7 +2094,7 @@ const PharmacyManager = () => {
                         type="number"
                         min="0"
                         max={netPayable}
-                        step="0.5"
+                        step="any"
                         value={dispensePaidAmount}
                         onChange={(e) => setDispensePaidAmount(e.target.value)}
                         placeholder={netPayable.toFixed(2)}
@@ -2108,14 +2108,14 @@ const PharmacyManager = () => {
                         onClick={() => setDispensePaidAmount(netPayable)}
                         className="px-2 py-0.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 rounded-md text-[10px] font-bold border border-emerald-200 transition cursor-pointer"
                       >
-                        Full (${netPayable.toFixed(0)})
+                        Full (${netPayable.toFixed(2)})
                       </button>
                       <button
                         type="button"
                         onClick={() => setDispensePaidAmount(Number((netPayable / 2).toFixed(2)))}
                         className="px-2 py-0.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-md text-[10px] font-bold border border-slate-200 transition cursor-pointer"
                       >
-                        50% (${(netPayable / 2).toFixed(0)})
+                        50% (${(netPayable / 2).toFixed(2)})
                       </button>
                       <button
                         type="button"
