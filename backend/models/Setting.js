@@ -11,7 +11,7 @@ const settingSchema = new mongoose.Schema({
   },
   phone: {
     type: String,
-    default: '+252 61 5000000'
+    default: '+252 61 2339093'
   },
   email: {
     type: String,
@@ -19,7 +19,7 @@ const settingSchema = new mongoose.Schema({
   },
   address: {
     type: String,
-    default: 'Mogadishu Main Road, KM4, Somalia'
+    default: 'Mogadishu Main Road, Isgoyska howalwadaag, Somalia'
   },
   website: {
     type: String,

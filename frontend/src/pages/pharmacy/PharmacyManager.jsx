@@ -2237,7 +2237,7 @@ const PharmacyManager = () => {
           <div className="text-center pb-3 border-b-2 border-purple-600 space-y-1">
             <h2 className="text-lg font-black text-slate-900 tracking-tight uppercase">SNAB DENTAL & DERMATOLOGIC CLINIC</h2>
             <p className="text-[10px] text-amber-600 font-bold uppercase">Specialized Dental Care • Oral Surgery • Dermatologic Care</p>
-            <p className="text-[10px] text-slate-500 font-mono">Mogadishu Main Road, KM4, Somalia • Tel: +252 61 5000000</p>
+            <p className="text-[10px] text-slate-500 font-mono">Mogadishu Main Road, Isgoyska howalwadaag, Somalia • Tel: +252 61 2339093</p>
           </div>
 
           <div className="p-3.5 bg-slate-50 rounded-2xl space-y-1.5 font-mono text-[11px] border border-slate-200">
@@ -2339,7 +2339,7 @@ const PharmacyManager = () => {
           <div className="text-center pb-3 border-b-2 border-purple-600 space-y-1">
             <h2 className="text-lg font-black text-slate-900 tracking-tight uppercase">SNAB DENTAL &amp; DERMATOLOGIC CLINIC</h2>
             <p className="text-[10px] text-amber-600 font-bold uppercase">Specialized Dental Care • Oral Surgery • Dermatologic Care</p>
-            <p className="text-[10px] text-slate-500 font-mono">Mogadishu Main Road, KM4, Somalia • Tel: +252 61 5000000</p>
+            <p className="text-[10px] text-slate-500 font-mono">Mogadishu Main Road, Isgoyska howalwadaag, Somalia • Tel: +252 61 2339093</p>
           </div>
 
           {/* Prescription Details */}

@@ -362,7 +362,7 @@ const PatientProfile = () => {
                   SNAB DENTAL AND DERMATOLOGIC CLINIC
                 </h2>
                 <p className="text-xs font-bold text-amber-600 uppercase">Patient Medical History & Treatment Record</p>
-                <p className="text-[11px] text-slate-500">Mogadishu, KM4 • Tel: +252 61 5000000 • info@snabdental.com</p>
+                <p className="text-[11px] text-slate-500">Mogadishu Main Road, Isgoyska howalwadaag • Tel: +252 61 2339093 • info@snabdental.com</p>
               </div>
             </div>
 

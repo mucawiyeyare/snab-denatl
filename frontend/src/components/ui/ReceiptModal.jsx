@@ -114,7 +114,7 @@ const ReceiptModal = ({ isOpen, onClose, payment }) => {
     <img src="/logo.png" alt="SNAB Dental" onerror="this.style.display='none'" />
     <div class="clinic-name">SNAB DENTAL AND DERMATOLOGIC CLINIC</div>
     <div class="clinic-subtitle">Specialized Dental &amp; Dermatologic Care • Oral Surgery</div>
-    <div class="clinic-address">Mogadishu Main Road, KM4 • Tel: +252 61 5000000</div>
+    <div class="clinic-address">Mogadishu Main Road, Isgoyska howalwadaag • Tel: +252 61 2339093</div>
     <div class="clinic-email">info@snabdental.com • www.snabdental.com</div>
   </div>
 
@@ -303,7 +303,7 @@ const ReceiptModal = ({ isOpen, onClose, payment }) => {
               SNAB DENTAL AND DERMATOLOGIC CLINIC
             </h2>
             <p className="text-[11px] text-amber-600 font-bold uppercase">Specialized Dental & Dermatologic Care • Oral Surgery</p>
-            <p className="text-[11px] text-slate-500">Mogadishu Main Road, KM4 • Tel: +252 61 5000000</p>
+            <p className="text-[11px] text-slate-500">Mogadishu Main Road, Isgoyska howalwadaag • Tel: +252 61 2339093</p>
             <p className="text-[10px] text-slate-400">info@snabdental.com • www.snabdental.com</p>
           </div>
 

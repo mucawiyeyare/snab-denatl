@@ -8,15 +8,28 @@ export const getSettings = async (req, res, next) => {
       settings = await Setting.create({
         clinic_name: 'SNAB Dental Clinic',
         tagline: 'Specialized Dental Care & Oral Surgery',
-        phone: '+252 61 5000000',
+        phone: '+252 61 2339093',
         email: 'info@snabdental.com',
-        address: 'Mogadishu Main Road, KM4, Somalia',
+        address: 'Mogadishu Main Road, Isgoyska howalwadaag, Somalia',
         website: 'www.snabdental.com',
         consultation_fee: 20,
         currency: 'USD',
         currency_symbol: '$',
         tooth_numbering_system: 'FDI (Two-digit notation)'
       });
+    } else {
+      let updated = false;
+      if (settings.address && settings.address.includes('KM4')) {
+        settings.address = 'Mogadishu Main Road, Isgoyska howalwadaag, Somalia';
+        updated = true;
+      }
+      if (settings.phone && settings.phone.includes('5000000')) {
+        settings.phone = '+252 61 2339093';
+        updated = true;
+      }
+      if (updated) {
+        await settings.save();
+      }
     }
     res.json({ success: true, data: settings });
   } catch (error) {

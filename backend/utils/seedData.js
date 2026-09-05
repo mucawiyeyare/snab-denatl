@@ -315,9 +315,9 @@ const seedAll = async () => {
     await Setting.findOneAndUpdate({}, {
       clinic_name: 'SNAB Dental and Dermatologic Clinic',
       tagline: 'Specialized Dental & Dermatologic Care • Oral Surgery',
-      phone: '+252 61 5000000',
+      phone: '+252 61 2339093',
       email: 'info@snabdental.com',
-      address: 'Mogadishu Main Road, KM4, Somalia',
+      address: 'Mogadishu Main Road, Isgoyska howalwadaag, Somalia',
       website: 'www.snabdental.com',
       consultation_fee: 20,
       currency: 'USD',

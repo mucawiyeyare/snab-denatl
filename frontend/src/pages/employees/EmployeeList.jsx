@@ -215,7 +215,7 @@ const EmployeeList = () => {
                 required
                 value={formData.phone}
                 onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                placeholder="+252 61 5000000"
+                placeholder="+252 61 2339093"
                 className="w-full px-3.5 py-2 rounded-xl border border-slate-200 text-xs text-slate-800 placeholder:text-slate-400 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 bg-white transition"
               />
             </div>

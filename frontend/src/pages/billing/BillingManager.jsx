@@ -653,7 +653,7 @@ const BillingManager = () => {
           <div className="text-center pb-3 border-b-2 border-blue-600 space-y-1">
             <h2 className="text-lg font-black text-slate-900 uppercase">SNAB DENTAL & DERMATOLOGIC CLINIC</h2>
             <p className="text-[10px] text-amber-600 font-bold uppercase">Official Patient Billing Statement</p>
-            <p className="text-[10px] text-slate-400 font-mono">Mogadishu Main Road, Somalia • Tel: +252 61 5000000</p>
+            <p className="text-[10px] text-slate-400 font-mono">Mogadishu Main Road, Isgoyska howalwadaag, Somalia • Tel: +252 61 2339093</p>
           </div>
 
           {/* Invoice Summary Box */}
